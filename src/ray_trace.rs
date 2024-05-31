@@ -154,8 +154,8 @@ fn launch_parent_ray(
         z = prev_z + vz * consts::DT;
 
         // 2. update meshx, meshz
-        let mut prev_meshx = meshx;
-        let mut prev_meshz = meshz;
+        let prev_meshx = meshx;
+        let prev_meshz = meshz;
         (meshx, meshz) = mesh.get_mesh_coords_in_area(
             x, z,
             ( // min pt
@@ -277,9 +277,9 @@ fn launch_parent_ray(
         }
         // swap if out of order
         if isCrossX && isCrossZ {
-            let lastCrossingInd = ray.crossings.len()-1;
-            if (x - prev_x) * (ray.crossings[lastCrossingInd].x - ray.crossings[lastCrossingInd-1].x) < 0.0 {
-                ray.crossings.swap(lastCrossingInd, lastCrossingInd-1);
+            let last_crossing_ind = ray.crossings.len()-1;
+            if (x - prev_x) * (ray.crossings[last_crossing_ind].x - ray.crossings[last_crossing_ind-1].x) < 0.0 {
+                ray.crossings.swap(last_crossing_ind, last_crossing_ind-1);
             }
         }
         // update marked array
