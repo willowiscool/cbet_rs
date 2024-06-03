@@ -90,7 +90,7 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
 /// pointers, which might be what we could switch it to?)
 fn launch_parent_ray(
     ray: &mut Ray, mesh: &Mesh, deden: &Vec<(f64, f64)>,
-    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<usize>>, i: usize
+    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<usize>>, raynum: usize
 ) {
     // Maybe it is better to have all of these in one vector that stores a struct, i.e.
     // struct Timestamp { x, z, vx, vz, mx, mz }??
@@ -112,12 +112,12 @@ fn launch_parent_ray(
         distance.push(distance[i-1] + f64::sqrt((childx[i] - childx[i-1]).powi(2) + (childz[i] - childz[i-1]).powi(2)));
     }
 
-    let initArea = {
-        let initDiffX = ray.x0 - childx[0];
-        let initDiffZ = ray.z0 - childz[0];
-        let initDiffMag = f64::sqrt(initDiffX*initDiffX + initDiffZ*initDiffZ);
-        let initProjCoeff = f64::abs(ray.kx0 * (initDiffZ/initDiffMag) - ray.kz0 * (initDiffX/initDiffMag));
-        initDiffMag*initProjCoeff
+    let init_area = {
+        let init_diff_x = ray.x0 - childx[0];
+        let init_diff_z = ray.z0 - childz[0];
+        let init_diff_mag = f64::sqrt(init_diff_x*init_diff_x + init_diff_z*init_diff_z);
+        let init_proj_coeff = f64::abs(ray.kx0 * (init_diff_z/init_diff_mag) - ray.kz0 * (init_diff_x/init_diff_mag));
+        init_diff_mag*init_proj_coeff
     };
 
     // renamed from thisx_0, thisz_0, as well as meshx, meshz
@@ -129,8 +129,8 @@ fn launch_parent_ray(
     let mut vx = consts::C_SPEED*consts::C_SPEED * ((ray.kx0 / knorm) * k) / consts::OMEGA;
     let mut vz = consts::C_SPEED*consts::C_SPEED * ((ray.kz0 / knorm) * k) / consts::OMEGA;
 
-    let mut currDist = 0.0;
-    for i in 1..consts::NT {
+    let mut curr_dist = 0.0;
+    for _ in 1..consts::NT {
         // 1. Calculate velocity and position at current timestamp
         // ===
         // **copied from launch_child_ray**
@@ -164,8 +164,8 @@ fn launch_parent_ray(
 
         let mut lastx = 10000.0;
         let mut lastz = 10000.0;
-        let mut isCrossX = false;
-        let mut isCrossZ = false;
+        let mut is_cross_x = false;
+        let mut is_cross_z = false;
 
         // If crosses x, create a crossing
         // I changed the code quite a bit from the c++ impl, to eliminate redundancies
@@ -197,28 +197,28 @@ fn launch_parent_ray(
                     z: crossx,
                     boxesx: meshx,
                     boxesz: meshz,
-                    areaRatio: {
+                    area_ratio: {
                         let extra = f64::sqrt((currx - prev_x).powi(2) + (crossx - prev_z).powi(2));
-                        let childxp = utils::interp(childx, &distance, currDist + extra);
-                        let childzp = utils::interp(childz, &distance, currDist + extra);
+                        let childxp = utils::interp(childx, &distance, curr_dist + extra);
+                        let childzp = utils::interp(childz, &distance, curr_dist + extra);
 
-                        let diffX = currx - childxp;
-                        let diffZ = crossx - childzp;
-                        let diffMag = f64::sqrt(diffX*diffX + diffZ*diffZ);
+                        let diff_x = currx - childxp;
+                        let diff_z = crossx - childzp;
+                        let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
 
                         let interpkx = frac*prev_vx + (1.0-frac)*vz;
                         let interpkz = frac*prev_vz + (1.0-frac)*vz;
-                        let interpkMag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
+                        let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
 
-                        let projCoeff = f64::abs(
-                            (interpkx/interpkMag) * (diffZ/diffMag)
-                            - (interpkz/interpkMag) * (diffX/diffMag));
+                        let proj_coeff = f64::abs(
+                            (interpkx/interpk_mag) * (diff_z/diff_mag)
+                            - (interpkz/interpk_mag) * (diff_x/diff_mag));
 
-                        diffMag*projCoeff/initArea
+                        diff_mag*proj_coeff/init_area
                     },
                     i_b: -1.0, // TODO: change!
                 });
-                isCrossX = true;
+                is_cross_x = true;
                 lastx = currx;
             }
         }
@@ -247,33 +247,33 @@ fn launch_parent_ray(
                     z: currz,
                     boxesx: meshx,
                     boxesz: meshz,
-                    areaRatio: {
+                    area_ratio: {
                         let extra = f64::sqrt((crossz - prev_x).powi(2) + (currz - prev_z).powi(2));
-                        let childxp = utils::interp(childx, &distance, currDist + extra);
-                        let childzp = utils::interp(childz, &distance, currDist + extra);
+                        let childxp = utils::interp(childx, &distance, curr_dist + extra);
+                        let childzp = utils::interp(childz, &distance, curr_dist + extra);
 
-                        let diffX = crossz - childxp;
-                        let diffZ = currz - childzp;
-                        let diffMag = f64::sqrt(diffX*diffX + diffZ*diffZ);
+                        let diff_x = crossz - childxp;
+                        let diff_z = currz - childzp;
+                        let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
 
                         let interpkx = frac*prev_vx + (1.0-frac)*vz;
                         let interpkz = frac*prev_vz + (1.0-frac)*vz;
-                        let interpkMag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
+                        let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
 
-                        let projCoeff = f64::abs(
-                            (interpkx/interpkMag) * (diffZ/diffMag)
-                            - (interpkz/interpkMag) * (diffX/diffMag));
+                        let proj_coeff = f64::abs(
+                            (interpkx/interpk_mag) * (diff_z/diff_mag)
+                            - (interpkz/interpk_mag) * (diff_x/diff_mag));
 
-                        diffMag*projCoeff/initArea
+                        diff_mag*proj_coeff/init_area
                     },
                     i_b: -1.0, // TODO: change!
                 });
-                isCrossZ = true;
+                is_cross_z = true;
                 lastz = currz;
             }
         }
         // swap if out of order
-        if isCrossX && isCrossZ {
+        if is_cross_x && is_cross_z {
             let last_crossing_ind = ray.crossings.len()-1;
             if (x - prev_x) * (ray.crossings[last_crossing_ind].x - ray.crossings[last_crossing_ind-1].x) < 0.0 {
                 ray.crossings.swap(last_crossing_ind, last_crossing_ind-1);
@@ -281,10 +281,10 @@ fn launch_parent_ray(
         }
         // update marked array
         if meshx != prev_meshx || meshz != prev_meshz {
-            marked[meshx*mesh.nz + meshz].push(i);
+            marked[meshx*mesh.nz + meshz].push(raynum);
         }
         //uray.push(uray[tt-1]);
-        currDist += f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
+        curr_dist += f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
         if x < mesh.xmin || x > mesh.xmax || z < mesh.zmin || z > mesh.zmax {
             break;
         }

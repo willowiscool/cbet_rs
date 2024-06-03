@@ -114,7 +114,7 @@ pub struct Crossing {
     pub z: f64,
     pub boxesx: usize,
     pub boxesz: usize,
-    pub areaRatio: f64,
+    pub area_ratio: f64,
     pub i_b: f64,
 }
 
