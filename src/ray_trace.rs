@@ -69,13 +69,10 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
     // The Mesh::wpe function (currently commented out) finds the wpe without doing that,
     // but only for the point, not interpolated. Consider using that to find wpe instead?
     // Also, I changed pow(..., 2) to just multiplying it by itself
-    //
-    // Also, this can definitely be optimized. Possibly: let interp take a closure that
-    // gets the required value?
     let wpe_interp = f64::sqrt(
-        utils::interp(
-            &(0..mesh.nx).map(|i| mesh.points[mesh.nz*i].eden).collect(), // eden.col(0)
-            &(0..mesh.nx).map(|i| mesh.points[mesh.nz*i].x).collect(), // x.col(0)
+        utils::interp_closure(
+            |i| { mesh.points[mesh.nz*i].eden }, mesh.nx, // eden.col(0) as y, ysize
+            |i| { mesh.points[mesh.nz*i].x }, mesh.nx, // x.col(0) as x, xsize
             x0
         ) * 1e6 * consts::EC*consts::EC / (consts::ME*consts::E0)
     );
@@ -137,10 +134,10 @@ fn launch_parent_ray(
         // 1. Calculate velocity and position at current timestamp
         // ===
         // **copied from launch_child_ray**
-        let mydedendx = utils::interp(
-            &(0..mesh.nx).map(|i| deden[mesh.nz*i + (mesh.nz+1)/2].0).collect(), // dedendx.col((nz+1)/2)
-            &(0..mesh.nx).map(|i| mesh.points[mesh.nz*i].x).collect(), // x.col(0)
-            x // currently prev_x
+        let mydedendx = utils::interp_closure(
+            |i| { deden[mesh.nz*i + (mesh.nz+1)/2].0 }, mesh.nx, //dedendx.col((nz+1)/2)
+            |i| { mesh.points[mesh.nz*i].x }, mesh.nx, // x.col(0)
+            x
         );
 
         // update pos, vel, equivalent to setting myx/z[tt] and myvx/z[tt]
@@ -322,9 +319,9 @@ fn launch_child_ray(
         // ===
         // might also assume a linear electron density gradient?
         // TODO: move computing dedendx.col, x.col outside of for loop
-        let mydedendx = utils::interp(
-            &(0..mesh.nx).map(|i| deden[mesh.nz*i + (mesh.nz+1)/2].0).collect(), // dedendx.col((nz+1)/2)
-            &(0..mesh.nx).map(|i| mesh.points[mesh.nz*i].x).collect(), // x.col(0)
+        let mydedendx = utils::interp_closure(
+            |i| { deden[mesh.nz*i + (mesh.nz+1)/2].0 }, mesh.nx, // dedendx.col((nz+1)/2)
+            |i| { mesh.points[mesh.nz*i].x }, mesh.nx, // x.col(0)
             x[tt-1]
         );
 
