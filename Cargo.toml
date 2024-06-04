@@ -5,3 +5,7 @@ edition = "2021"
 
 [dependencies]
 rand = "0.8.5"
+# https://github.com/aldanor/hdf5-rust/issues/257
+hdf5 = { git = "https://github.com/aldanor/hdf5-rust.git" }
+# using same vers. as hdf5. only used in save_hdf5
+ndarray = "0.15"
