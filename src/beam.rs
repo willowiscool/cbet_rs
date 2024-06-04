@@ -10,10 +10,15 @@ use crate::consts;
 /// `Rc<RefCell<Ray>>`, so that marked can own references to the specific rays, and they can
 /// still be modified (as crossings are added), but I assume this would also make ray tracing
 /// slower, so I think storing the indices is okay.
+/// * raystore: similar to marked, except it only stores a single ray per each spot on the mesh
+/// (by its index), as well as a boolean that notes whether or not there is a ray in that spot
+/// at all. This is populated by cbet, which chooses a random ray when there are multiple rays
+/// in the same zone.
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
     pub marked: Vec<Vec<usize>>,
+    pub raystore: Vec<(bool, usize)>,
 }
 impl Beam {
     /// Creates the first beam based on a bunch of constants in consts.rs. Close to 1:1
@@ -50,6 +55,7 @@ impl Beam {
                 ray
             }).collect(),
             marked: Vec::new(),
+            raystore: Vec::new(),
         };
         beam
     }
@@ -76,6 +82,7 @@ impl Beam {
                 ray
             }).collect(),
             marked: Vec::new(),
+            raystore: Vec::new(),
         };
         beam
     }
@@ -107,7 +114,11 @@ pub struct Ray {
 /// * boxesx, boxesz: the zone coordinates of the crossing (note: in c++, this is stored as
 /// just boxes, where each element is a tuple)
 /// * areaRatio: the ratio between parent and child ray
+/// * dkx, dkz, dkmag: vectors of movement to next crossing, i guess. computed in main.cpp after
+/// ray tracing runs, but figured it would be more efficient to compute them in the ray tracing
+/// function. also, computed as dkx_new, dkz_new, dkmag_new in cpp impl.
 /// * i_b: the intensity, calculated in the CBET stage.
+/// * wMult: "cumulative product of the normalized ray energies" - cbet.cpp:336
 #[derive(Debug)]
 pub struct Crossing {
     pub x: f64,
@@ -115,6 +126,10 @@ pub struct Crossing {
     pub boxesx: usize,
     pub boxesz: usize,
     pub area_ratio: f64,
+    pub dkx: f64,
+    pub dkz: f64,
+    pub dkmag: f64,
     pub i_b: f64,
+    pub w_mult: f64,
 }
 

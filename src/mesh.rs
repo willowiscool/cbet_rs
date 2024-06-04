@@ -85,25 +85,6 @@ impl Mesh {
     /// bounds. Right now, it would just return (0.0, 0.0)
     pub fn get_mesh_coords(&self, x: f64, z: f64) -> (usize, usize) {
         self.get_mesh_coords_in_area(x, z, (0, 0), (self.nx-1, self.nz-1))
-        /*
-        let mut point = (0, 0);
-        for xx in 0..self.nx {
-            let px = self.get(xx, 0).x;
-            if (x - px <= (1.0 + 1.0e-10)*self.dx) &&
-                (x - px >= -(0.0 + 1.0e-10)*self.dx) {
-                point.0 = xx;
-                break;
-            }
-        }
-        for zz in 0..self.nz {
-            let pz = self.get(zz, 0).z;
-            if (z - pz <= (1.0 + 1.0e-10)*self.dz) &&
-                (z - pz >= -(0.0 + 1.0e-10)*self.dz) {
-                point.1 = zz;
-                break;
-            }
-        }
-        point*/
     }
 
     /// Gets the mesh coordinates of a point given its real-world coordinates, only

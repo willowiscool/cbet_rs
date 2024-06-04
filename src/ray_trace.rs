@@ -216,7 +216,11 @@ fn launch_parent_ray(
 
                         diff_mag*proj_coeff/init_area
                     },
-                    i_b: -1.0, // TODO: change!
+                    dkx: 0.0,
+                    dkz: 0.0,
+                    dkmag: 0.0,
+                    i_b: -1.0,
+                    w_mult: 1.0,
                 });
                 is_cross_x = true;
                 lastx = currx;
@@ -266,18 +270,25 @@ fn launch_parent_ray(
 
                         diff_mag*proj_coeff/init_area
                     },
-                    i_b: -1.0, // TODO: change!
+                    dkx: 0.0,
+                    dkz: 0.0,
+                    dkmag: 0.0,
+                    i_b: -1.0,
+                    w_mult: 1.0,
                 });
                 is_cross_z = true;
                 lastz = currz;
             }
         }
-        // swap if out of order
+        // swap if out of order. then, calculate dkx, dkz, dkmag for prev. crossing(s)
         if is_cross_x && is_cross_z {
             let last_crossing_ind = ray.crossings.len()-1;
             if (x - prev_x) * (ray.crossings[last_crossing_ind].x - ray.crossings[last_crossing_ind-1].x) < 0.0 {
                 ray.crossings.swap(last_crossing_ind, last_crossing_ind-1);
             }
+            calc_dk(ray, last_crossing_ind-2);
+        } else if (is_cross_x || is_cross_z) && ray.crossings.len() > 1 {
+            calc_dk(ray, ray.crossings.len()-2);
         }
         // update marked array
         if meshx != prev_meshx || meshz != prev_meshz {
@@ -289,6 +300,23 @@ fn launch_parent_ray(
             break;
         }
     }
+}
+
+/// Calculates and inserts dk values of crossing at ind. Ind cannot be the last index of the
+/// crossings.
+fn calc_dk(ray: &mut Ray, ind: usize) {
+    assert!(ind < ray.crossings.len()-1);
+    let dkx = ray.crossings[ind+1].x - ray.crossings[ind].x;
+    let dkz = ray.crossings[ind+1].z - ray.crossings[ind].z;
+    let dkmag = f64::sqrt(dkx.powi(2) + dkz.powi(2));
+    // normalize, as in cpp impl.
+    let dkx_new = dkx/dkmag;
+    let dkz_new = dkz/dkmag;
+    let dkmag_new = dkmag*10000.0;
+
+    ray.crossings[ind].dkx = dkx_new;
+    ray.crossings[ind].dkz = dkz_new;
+    ray.crossings[ind].dkmag = dkmag_new;
 }
 
 /// Launch the child ray. Returns a vector of coordinates at each timestamp that represent the

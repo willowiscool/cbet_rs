@@ -3,6 +3,7 @@ pub mod mesh;
 pub mod beam;
 pub mod ray_trace;
 pub mod utils;
+pub mod cbet;
 //pub use crate::rayTrace;
 
 use crate::mesh::*;

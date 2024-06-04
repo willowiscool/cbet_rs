@@ -1,6 +1,7 @@
 use cbet_rs::consts;
 use cbet_rs::beam::*;
 use cbet_rs::ray_trace;
+use cbet_rs::cbet;
 
 fn main() {
     println!("Default mesh:");
@@ -15,10 +16,12 @@ fn main() {
     println!("Point at (55, 20): {:?}", m.get(55, 20));
     println!("Point at (50, 25): {:?}", m.get(50, 25));
 
-    let mut beam1 = Beam::beam1();
-    let mut beam2 = Beam::beam2();
+    let beam1 = Beam::beam1();
+    let beam2 = Beam::beam2();
     let mut beams = vec![beam1, beam2];
     ray_trace::ray_trace(&m, &mut beams);
 
-    println!("{:?}", beams[0].rays[0]);
+    //println!("{:?}", beams[0].rays[0]);
+
+    cbet::cbet(&m, &mut beams);
 }

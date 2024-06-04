@@ -48,6 +48,11 @@ const DX: f64 = (XMAX-XMIN)/(NX as f64-1.0);
 const DZ: f64 = (ZMAX-ZMIN)/(NZ as f64-1.0);
 pub const DT: f64 = COURANT_MULT*([DX, DZ][(DX < DZ) as usize])/C_SPEED;
 
+// CBET constants
+pub const MAX_INCR: f64 = 0.2;
+pub const CONVERGE: f64 = 1e-7;
+pub const CBETCONVERGENCE: f64 = 0.9990;
+
 // ===
 // scientific consts copied from def.h, comments also copied haha
 // ===
@@ -64,3 +69,24 @@ pub const OMEGA: f64 = 2.0*std::f64::consts::PI*FREQ; // frequency of light, in 
 // the critical density occurs when omega = omega_p,e
 // NOTE: replaced pow(omega,2) with omega*omega and pow(ec, 2) with ec*ec
 pub const NCRIT: f64 = 1e-6*(OMEGA*OMEGA*ME*E0/(EC*EC));
+
+// More CBET constants
+pub const ESTAT: f64 = 4.80320427e-10; // electron charge in statC
+pub const ME_G: f64 = 9.10938356e-28; // electron mass in g
+pub const KB: f64 = 1.3806485279e-16; // Boltzmann constant in erg/K
+pub const NORM: f64 = 1e14;
+pub const CBET_CONST: f64 = (8.0*std::f64::consts::PI*1e7*NORM/C_SPEED)*(ESTAT*ESTAT/(4.0*ME_G*C_SPEED*KB*1.1605e7))*1e-4;
+
+pub const Z: f64 = 3.1; // ionization state
+pub const TE_EV: f64 = 2.0e3; // Te_eV; the comment on Te is "Temperature of electron in K"
+pub const TI_EV: f64 = 1.0e3; // Ti_eV; the comment on Ti is "Temperature of ion in K"
+pub const MI_KG: f64 = 10230.0*ME; // Mass of ion in kg
+// uh oh not a real const because of sqrt
+pub static mut CS: f64 = 0.0;
+pub const IAW: f64 = 0.542940629585429; // ion-acoustic wave energy-damping rate (nu_ia/omega_s)!!
+
+pub fn init_consts() {
+    unsafe {
+        CS = 1e2*f64::sqrt(EC*(Z*TE_EV+3.0*TI_EV)/MI_KG);
+    }
+}
