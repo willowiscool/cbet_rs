@@ -22,6 +22,7 @@ fn main() {
 
     println!("Doing CBET calculation");
     let now = SystemTime::now();
+    cbet::init_crossings(&mut beams, consts::INTENSITY);
     cbet::cbet(&m, &mut beams);
     println!("\ttook {} seconds", now.elapsed().unwrap().as_secs_f64());
 

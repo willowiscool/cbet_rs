@@ -6,7 +6,6 @@ use crate::consts;
 pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
     consts::init_consts(); // inits CS const
     let mut currmax = consts::MAX_INCR;
-    init_crossings(beams);
     create_raystore(beams, mesh.nx, mesh.nz);
 
     for i in 1..=500 {
@@ -221,19 +220,18 @@ fn get_raycross(ray: &Ray, ix: usize, iz: usize) -> (&Crossing, &Crossing) {
     (&ray.crossings[raycross], &ray.crossings[std::cmp::min(ray.crossings.len()-1, raycross+1)])
 }
 
-/// Initialize values of crossings that cbet uses/modifies: i_b, wMult. Also, computes the
-/// medianDS (median of all dkmags), and returns that.
-///
-/// UPDATE: I commented out the parts that compute medianDS because they aren't used.
+/// Initialize the i_b and w_mult values of each crossing, given an initial intensity. One TODO
+/// would be to have the intensity be a property of the beam instead, so different beams can
+/// have different intensities in the future.
 ///
 /// C++ equivalent: initArrays in cbet.cpp
-fn init_crossings(beams: &mut [Beam]) /*-> f64*/ {
+pub fn init_crossings(beams: &mut [Beam], intensity: f64) /*-> f64*/ {
     //let mut dkmags = Vec::new();
     beams.iter_mut().for_each(|beam| {
         let increment = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(beam.rays.len() as f64-1.0);
         beam.rays.iter_mut().enumerate().for_each(|(i, ray)| {
             let offset = consts::BEAM_MIN_Z + (increment*i as f64);
-            let intensity = (consts::INTENSITY/1e14)*f64::exp(-2.0*f64::abs(offset/2e-4).powf(4.0));
+            let intensity = (intensity/1e14)*f64::exp(-2.0*f64::abs(offset/2e-4).powf(4.0));
 
             ray.crossings.iter_mut().for_each(|crossing| {
                 crossing.i_b = intensity;

@@ -206,7 +206,7 @@ fn launch_parent_ray(
                         let diff_z = crossx - childzp;
                         let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
 
-                        let interpkx = frac*prev_vx + (1.0-frac)*vz;
+                        let interpkx = frac*prev_vx + (1.0-frac)*vx;
                         let interpkz = frac*prev_vz + (1.0-frac)*vz;
                         let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
 
@@ -260,7 +260,7 @@ fn launch_parent_ray(
                         let diff_z = currz - childzp;
                         let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
 
-                        let interpkx = frac*prev_vx + (1.0-frac)*vz;
+                        let interpkx = frac*prev_vx + (1.0-frac)*vx;
                         let interpkz = frac*prev_vz + (1.0-frac)*vz;
                         let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
 
