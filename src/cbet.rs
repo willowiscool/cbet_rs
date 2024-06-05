@@ -122,7 +122,11 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
                     }
                     // using variable name from c++, islastq = is that the
                     // last crossing
-                    let (raycross, raycross_next) = get_raycross(&other_beam.rays[ray_o], ix, iz);
+                    let direction = match crossing.dkx {
+                        0.0 => Direction::Z,
+                        _ => Direction::X,
+                    };
+                    let (raycross, raycross_next) = get_raycross(&other_beam.rays[ray_o], ix, iz, direction);
 
                     get_cbet_increment(mesh, crossing, raycross, raycross_next)
                 };
@@ -189,7 +193,7 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
     // FIND COUPLING MULTIPLIER
     // Split coupling multiplier into discrete chuncks [sic]->easier debugging
     let param1 = consts::CBET_CONST/(consts::OMEGA*(consts::TE_EV/1e3 + 3.0 * consts::TI_EV/1e3/consts::Z));
-    let param2 = ne_over_nc/consts::IAW*consts::IAW*consts::IAW*eta; // Need to fix consts::IAW
+    let param2 = ne_over_nc/consts::IAW*consts::IAW*consts::IAW*eta; // Need to fix iaw
     let param3 = (eta*eta-1.0).powi(2) + consts::IAW*consts::IAW*eta*eta;
     let param4 = interaction_mult;
     // WILLOW SAYS: "ds" is replaced with crossing.dkmag, cuz that's what it is
@@ -209,13 +213,18 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
 /// This fn. returns a ptr. to the crossing as well as a ptr. to the next crossing, if there is
 /// one (otherwise, just the same ptr. in both places). This is because of stuff later in the
 /// code.
-fn get_raycross(ray: &Ray, ix: usize, iz: usize) -> (&Crossing, &Crossing) {
+enum Direction {X, Z}
+fn get_raycross(ray: &Ray, ix: usize, iz: usize, direction: Direction) -> (&Crossing, &Crossing) {
     let mut raycross = 0;
     while ray.crossings[raycross].boxesx != ix || ray.crossings[raycross].boxesz != iz {
         raycross += 1;
         if raycross > ray.crossings.len()-1 {
             panic!("Error! in raycross subroutine (this shouldn't happen)");
         }
+    }
+    match direction {
+        Direction::X => if ray.crossings[raycross].dkx == 0.0 { raycross += 1; },
+        Direction::Z => if ray.crossings[raycross].dkz == 0.0 { raycross += 1; },
     }
     (&ray.crossings[raycross], &ray.crossings[std::cmp::min(ray.crossings.len()-1, raycross+1)])
 }
