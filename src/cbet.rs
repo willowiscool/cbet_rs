@@ -122,11 +122,7 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
                     }
                     // using variable name from c++, islastq = is that the
                     // last crossing
-                    let direction = match crossing.dkx {
-                        0.0 => Direction::Z,
-                        _ => Direction::X,
-                    };
-                    let (raycross, raycross_next) = get_raycross(&other_beam.rays[ray_o], ix, iz, direction);
+                    let (raycross, raycross_next) = get_raycross(&other_beam.rays[ray_o], ix, iz);
 
                     get_cbet_increment(mesh, crossing, raycross, raycross_next)
                 };
@@ -213,18 +209,13 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
 /// This fn. returns a ptr. to the crossing as well as a ptr. to the next crossing, if there is
 /// one (otherwise, just the same ptr. in both places). This is because of stuff later in the
 /// code.
-enum Direction {X, Z}
-fn get_raycross(ray: &Ray, ix: usize, iz: usize, direction: Direction) -> (&Crossing, &Crossing) {
+fn get_raycross(ray: &Ray, ix: usize, iz: usize) -> (&Crossing, &Crossing) {
     let mut raycross = 0;
     while ray.crossings[raycross].boxesx != ix || ray.crossings[raycross].boxesz != iz {
         raycross += 1;
         if raycross > ray.crossings.len()-1 {
             panic!("Error! in raycross subroutine (this shouldn't happen)");
         }
-    }
-    match direction {
-        Direction::X => if ray.crossings[raycross].dkx == 0.0 { raycross += 1; },
-        Direction::Z => if ray.crossings[raycross].dkz == 0.0 { raycross += 1; },
     }
     (&ray.crossings[raycross], &ray.crossings[std::cmp::min(ray.crossings.len()-1, raycross+1)])
 }
