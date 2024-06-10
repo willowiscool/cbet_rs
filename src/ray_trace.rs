@@ -3,6 +3,7 @@ use crate::mesh::*;
 use crate::utils;
 use crate::consts;
 use std::cmp::min;
+use std::sync::Mutex;
 
 /// The rayTrace function populates the crossings of the rays in the beam array. It also
 /// populates the marked array of each beam. It overwrites any existing crossings and marked
@@ -49,9 +50,6 @@ pub fn ray_trace(mesh: &Mesh, beams: &mut [Beam]) {
         deden[i*mesh.nz+(mesh.nz-1)] = deden[i*mesh.nz+(mesh.nz-2)];
     }
 
-    // NOTE: wpe is a fn Mesh::wpe now instead of being precalculated
-    // bad move? let me know.
-
     beams.iter_mut().for_each(|beam| {
         // Initialize the marked array
         beam.marked = (0..(mesh.nx * mesh.nz)).map(|_| Vec::new()).collect();
@@ -90,7 +88,7 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
 /// pointers, which might be what we could switch it to?)
 fn launch_parent_ray(
     ray: &mut Ray, mesh: &Mesh, deden: &Vec<(f64, f64)>,
-    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<usize>>, raynum: usize
+    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<(usize, usize)>>, raynum: usize
 ) {
     // Maybe it is better to have all of these in one vector that stores a struct, i.e.
     // struct Timestamp { x, z, vx, vz, mx, mz }??
@@ -192,7 +190,7 @@ fn launch_parent_ray(
             assert!((frac >= 0.0) && (frac <= 1.0));
 
             if f64::abs(crossx - lastz) > 1.0e-12 {
-                ray.crossings.push(Crossing {
+                let crossing = Mutex::new(Crossing {
                     x: currx,
                     z: crossx,
                     boxesx: meshx,
@@ -222,6 +220,9 @@ fn launch_parent_ray(
                     i_b: -1.0,
                     w_mult: 1.0,
                 });
+                marked[meshx*mesh.nz + meshz].push((raynum, ray.crossings.len()));
+                ray.crossings.push(crossing);
+
                 is_cross_x = true;
                 lastx = currx;
             }
@@ -246,7 +247,7 @@ fn launch_parent_ray(
             assert!((frac >= 0.0) && (frac <= 1.0));
 
             if f64::abs(crossz - lastx) > 1.0e-12 {
-                ray.crossings.push(Crossing {
+                let crossing = Mutex::new(Crossing {
                     x: crossz,
                     z: currz,
                     boxesx: meshx,
@@ -276,6 +277,9 @@ fn launch_parent_ray(
                     i_b: -1.0,
                     w_mult: 1.0,
                 });
+                marked[meshx*mesh.nz + meshz].push((raynum, ray.crossings.len()));
+                ray.crossings.push(crossing);
+
                 is_cross_z = true;
                 lastz = currz;
             }
@@ -283,17 +287,18 @@ fn launch_parent_ray(
         // swap if out of order. then, calculate dkx, dkz, dkmag for prev. crossing(s)
         if is_cross_x && is_cross_z {
             let last_crossing_ind = ray.crossings.len()-1;
-            if (x - prev_x) * (ray.crossings[last_crossing_ind].x - ray.crossings[last_crossing_ind-1].x) < 0.0 {
+            let need_to_swap = {
+                let last_crossing = ray.crossings[last_crossing_ind].lock().unwrap();
+                let second_last_crossing = ray.crossings[last_crossing_ind-1].lock().unwrap();
+                (x - prev_x) * (last_crossing.x - second_last_crossing.x) < 0.0
+            };
+            if need_to_swap {
                 ray.crossings.swap(last_crossing_ind, last_crossing_ind-1);
             }
             calc_dk(ray, last_crossing_ind-2);
             calc_dk(ray, last_crossing_ind-1);
         } else if (is_cross_x || is_cross_z) && ray.crossings.len() > 1 {
             calc_dk(ray, ray.crossings.len()-2);
-        }
-        // update marked array
-        if meshx != prev_meshx || meshz != prev_meshz {
-            marked[meshx*mesh.nz + meshz].push(raynum);
         }
         //uray.push(uray[tt-1]);
         curr_dist += f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
@@ -307,17 +312,19 @@ fn launch_parent_ray(
 /// crossings.
 fn calc_dk(ray: &mut Ray, ind: usize) {
     assert!(ind < ray.crossings.len()-1);
-    let dkx = ray.crossings[ind+1].x - ray.crossings[ind].x;
-    let dkz = ray.crossings[ind+1].z - ray.crossings[ind].z;
+    let mut curr_crossing = ray.crossings[ind].lock().unwrap();
+    let next_crossing = ray.crossings[ind+1].lock().unwrap();
+    let dkx = next_crossing.x - curr_crossing.x;
+    let dkz = next_crossing.z - curr_crossing.z;
     let dkmag = f64::sqrt(dkx.powi(2) + dkz.powi(2));
     // normalize, as in cpp impl.
     let dkx_new = dkx/dkmag;
     let dkz_new = dkz/dkmag;
     let dkmag_new = dkmag*10000.0;
 
-    ray.crossings[ind].dkx = dkx_new;
-    ray.crossings[ind].dkz = dkz_new;
-    ray.crossings[ind].dkmag = dkmag_new;
+    curr_crossing.dkx = dkx_new;
+    curr_crossing.dkz = dkz_new;
+    curr_crossing.dkmag = dkmag_new;
 }
 
 /// Launch the child ray. Returns a vector of coordinates at each timestamp that represent the

@@ -23,9 +23,9 @@ fn main() {
     println!("Doing CBET calculation");
     let now = SystemTime::now();
     cbet::init_crossings(&mut beams, consts::INTENSITY);
-    cbet::cbet(&m, &mut beams);
+    cbet::cbet(&m, &mut beams, 16);
     println!("\ttook {} seconds", now.elapsed().unwrap().as_secs_f64());
 
     println!("Saving to \"out.hdf5\"");
-    cbet_rs::save_hdf5(&m, &beams, "out.hdf5").unwrap();
+    //cbet_rs::save_hdf5(&m, &beams, "out.hdf5").unwrap();
 }

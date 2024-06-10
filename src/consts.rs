@@ -26,7 +26,7 @@ pub const CHILD_OFFSET: f64 = 0.1e-4;
 // The following definitions are all for uray_mult
 // comments copied from c++ impl.
 pub const SIGMA: f64 = 2.0e-4;
-pub const INTENSITY: f64 = 1e16; // intensity of the beam in W/cm^2
+pub const INTENSITY: f64 = 1e17; // intensity of the beam in W/cm^2
 pub const COURANT_MULT: f64 = 0.1; // 0.37 // 0.25 // 0.36 // 0.22;
 pub const URAY_MULT: f64 = INTENSITY*COURANT_MULT*(1.0/RAYS_PER_ZONE as f64);
 // pub const URAY_MULT1: f64 = 5.0*INTENSITY*COURANT_MULT*(1.0/RAYS_PER_ZONE as f64);

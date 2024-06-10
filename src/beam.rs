@@ -1,3 +1,4 @@
+use std::sync::Mutex;
 use crate::consts;
 
 /// TODO: Give beam a position and direction within it, and then make a general new beam
@@ -5,20 +6,15 @@ use crate::consts;
 /// create the rays within the beams are hardcoded.
 ///
 /// * rays: you can tell
-/// * marked: a list of each spot on the mesh. each list contains the rays that pass through
-/// it, stored by their index. It would perhaps be more correct to store the rays in as
-/// `Rc<RefCell<Ray>>`, so that marked can own references to the specific rays, and they can
-/// still be modified (as crossings are added), but I assume this would also make ray tracing
-/// slower, so I think storing the indices is okay.
-/// * raystore: similar to marked, except it only stores a single ray per each spot on the mesh
-/// (by its index), as well as a boolean that notes whether or not there is a ray in that spot
-/// at all. This is populated by cbet, which chooses a random ray when there are multiple rays
-/// in the same zone.
+/// * marked: a list of each spot on the mesh. Each list contains the crossings that pass through
+/// it, as an ray index and a crossing index.
+/// * raystore: similar to marked, except it only stores a single crossing per each spot on the
+/// mesh. It's an option because there may not be a crossing in that spot.
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
-    pub marked: Vec<Vec<usize>>,
-    pub raystore: Vec<(bool, usize)>,
+    pub marked: Vec<Vec<(usize, usize)>>,
+    pub raystore: Vec<(bool, (usize, usize))>,
 }
 impl Beam {
     /// Creates the first beam based on a bunch of constants in consts.rs. Close to 1:1
@@ -89,7 +85,7 @@ impl Beam {
 }
 
 /// Ray struct stores:
-/// * List of crossings
+/// * List of crossings (in mutexes for thread safety while referenced in Crossing!)
 /// * x0, z0: initial position
 /// * cx0, cz0: initial position of child ray. the c++ impl. moves each ray in a single beam by
 /// a child offset, so maybe it is better to have child offset x/z fields in the beam rather
@@ -99,7 +95,7 @@ impl Beam {
 /// only the first item of the list is stored so I'm only using one
 #[derive(Debug)]
 pub struct Ray {
-    pub crossings: Vec<Crossing>,
+    pub crossings: Vec<Mutex<Crossing>>,
     pub x0: f64,
     pub z0: f64,
     pub cx0: f64,
@@ -119,7 +115,7 @@ pub struct Ray {
 /// function. also, computed as dkx_new, dkz_new, dkmag_new in cpp impl.
 /// * i_b: the intensity, calculated in the CBET stage.
 /// * wMult: "cumulative product of the normalized ray energies" - cbet.cpp:336
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Crossing {
     pub x: f64,
     pub z: f64,
@@ -132,4 +128,3 @@ pub struct Crossing {
     pub i_b: f64,
     pub w_mult: f64,
 }
-
