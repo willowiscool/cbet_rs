@@ -1,7 +1,7 @@
 use crate::beam::*;
 use crate::mesh::*;
 use crate::consts;
-use std::thread;
+use rayon::prelude::*;
 
 /// Do the CBET calculation! Populates the i_b fields of each crossing
 pub fn cbet(mesh: &Mesh, beams: &mut [Beam], nthreads: usize) {
@@ -109,51 +109,45 @@ fn limit_energy(crossing: &Crossing, multiplier_acc: f64, i0: f64, curr_max: f64
 /// Get CBET gain. Modifies the w_mult property of each crossing.
 fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam], nthreads: usize) {
     beams.iter().enumerate().for_each(|(beamnum, beam)| {
-        thread::scope(|s| {
-            for chunk in beam.rays.chunks(beam.rays.len() / nthreads) {
-                s.spawn(|| {
-                    chunk.iter().for_each(|ray| {
-                        ray.crossings.iter().for_each(|crossing| {
-                            // create a clone of the crossing
-                            let crossing_clone = {
-                                let crossing_mguard = crossing.lock().unwrap();
-                                crossing_mguard.clone()
-                            };
+        beam.rays.par_iter().for_each(|ray| {
+            ray.crossings.iter().for_each(|crossing| {
+                // create a clone of the crossing
+                let crossing_clone = {
+                    let crossing_mguard = crossing.lock().unwrap();
+                    crossing_mguard.clone()
+                };
 
-                            let other_beam_cbet_incr = |other_beam: &Beam| {
-                                // raycross/raycross_next are also clones
-                                let (raycross, raycross_next) = {
-                                    let (has_crossing, (other_rayind, raycross_ind)) =
-                                        other_beam.raystore[crossing_clone.boxesx*mesh.nz+crossing_clone.boxesz];
-                                    if !has_crossing {
-                                        return 0.0;
-                                    }
-                                    let other_ray_crossings = &other_beam.rays[other_rayind].crossings;
-                                    let raycross = other_ray_crossings[raycross_ind].lock().unwrap();
-                                    let raycross_next = if raycross_ind+1 == other_ray_crossings.len() {
-                                        raycross.clone()
-                                    } else {
-                                        let rcnext_mguard = other_ray_crossings[raycross_ind+1].lock().unwrap();
-                                        rcnext_mguard.clone()
-                                    };
-                                    (raycross.clone(), raycross_next)
-                                };
+                let other_beam_cbet_incr = |other_beam: &Beam| {
+                    // raycross/raycross_next are also clones
+                    let (raycross, raycross_next) = {
+                        let (has_crossing, (other_rayind, raycross_ind)) =
+                            other_beam.raystore[crossing_clone.boxesx*mesh.nz+crossing_clone.boxesz];
+                        if !has_crossing {
+                            return 0.0;
+                        }
+                        let other_ray_crossings = &other_beam.rays[other_rayind].crossings;
+                        let raycross = other_ray_crossings[raycross_ind].lock().unwrap();
+                        let raycross_next = if raycross_ind+1 == other_ray_crossings.len() {
+                            raycross.clone()
+                        } else {
+                            let rcnext_mguard = other_ray_crossings[raycross_ind+1].lock().unwrap();
+                            rcnext_mguard.clone()
+                        };
+                        (raycross.clone(), raycross_next)
+                    };
 
-                                get_cbet_increment(mesh, &crossing_clone, &raycross, &raycross_next)
-                            };
-                            let cbet_sum = beams.iter().enumerate().map(|(otherbeamnum, other_beam)| {
-                                if beamnum == otherbeamnum {
-                                    return 0.0;
-                                }
-                                other_beam_cbet_incr(other_beam)
-                            }).sum::<f64>();
+                    get_cbet_increment(mesh, &crossing_clone, &raycross, &raycross_next)
+                };
+                let cbet_sum = beams.iter().enumerate().map(|(otherbeamnum, other_beam)| {
+                    if beamnum == otherbeamnum {
+                        return 0.0;
+                    }
+                    other_beam_cbet_incr(other_beam)
+                }).sum::<f64>();
 
-                            let mut crossing = crossing.lock().unwrap();
-                            crossing.w_mult = f64::exp(-1.0*cbet_sum);
-                        });
-                    });
-                });
-            }
+                let mut crossing = crossing.lock().unwrap();
+                crossing.w_mult = f64::exp(-1.0*cbet_sum);
+            });
         });
     });
 }
@@ -263,7 +257,7 @@ fn create_raystore(beams: &mut [Beam], nx: usize, nz: usize) {
         beam.raystore = (0..nx*nz).map(|i| {
             let x = i / nz;
             let z = i % nz;
-            let marked = &beam.marked[x*nz+z];
+            let marked = &beam.marked[x*nz+z].lock().unwrap();
             match marked.len() {
                 0 => (false, (0, 0)),
                 1 => (true, marked[0]),

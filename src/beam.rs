@@ -13,7 +13,7 @@ use crate::consts;
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
-    pub marked: Vec<Vec<(usize, usize)>>,
+    pub marked: Vec<Mutex<Vec<(usize, usize)>>>,
     pub raystore: Vec<(bool, (usize, usize))>,
     pub intensity: f64,
 }
@@ -111,9 +111,9 @@ impl Beam {
                     uray: Vec::new(),
                 };
                 // ShiftZMin
-                let shiftAmount = (ray.z0 - (consts::ZMIN + 1.0e-10)) / kz_norm;
-                ray.x0 -= shiftAmount * kx_norm;
-                ray.z0 -= shiftAmount * kz_norm;
+                let shift_amount = (ray.z0 - (consts::ZMIN + 1.0e-10)) / kz_norm;
+                ray.x0 -= shift_amount * kx_norm;
+                ray.z0 -= shift_amount * kz_norm;
                 ray.uray.push(0.0);
                 // rotateChild
                 let curr_k_mag = f64::sqrt(ray.kx0*ray.kx0 + ray.kz0*ray.kz0);
@@ -160,9 +160,9 @@ impl Beam {
                     uray: Vec::new(),
                 };
                 // ShiftZMin
-                let shiftAmount = (ray.z0 - (consts::ZMIN + 1.0e-10)) / kz_norm;
-                ray.x0 -= shiftAmount * kx_norm;
-                ray.z0 -= shiftAmount * kz_norm;
+                let shift_amount = (ray.z0 - (consts::ZMIN + 1.0e-10)) / kz_norm;
+                ray.x0 -= shift_amount * kx_norm;
+                ray.z0 -= shift_amount * kz_norm;
                 ray.uray.push(0.0);
                 // rotateChild
                 let curr_k_mag = f64::sqrt(ray.kx0*ray.kx0 + ray.kz0*ray.kz0);
