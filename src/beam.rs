@@ -15,6 +15,7 @@ pub struct Beam {
     pub rays: Vec<Ray>,
     pub marked: Vec<Vec<(usize, usize)>>,
     pub raystore: Vec<(bool, (usize, usize))>,
+    pub intensity: f64,
 }
 impl Beam {
     /// Creates the first beam based on a bunch of constants in consts.rs. Close to 1:1
@@ -52,6 +53,7 @@ impl Beam {
             }).collect(),
             marked: Vec::new(),
             raystore: Vec::new(),
+            intensity: consts::INTENSITY,
         };
         beam
     }
@@ -79,6 +81,106 @@ impl Beam {
             }).collect(),
             marked: Vec::new(),
             raystore: Vec::new(),
+            intensity: consts::INTENSITY,
+        };
+        beam
+    }
+    /// This fn. is for the 2nd beam in the 3-beam test case (2d3beam branch of c++ impl.).
+    /// The c++ impl. includes a "rotate" function that I'm attempting to recreate here
+    pub fn beam3() -> Beam {
+        let x = consts::OFFSET2;
+        let z = consts::ZMIN + 0.1e-4;
+        let kx = 0.6;
+        let kz = 1.0;
+        let k_mag = f64::sqrt(kx*kx + kz*kz);
+        let kx_norm = kx / k_mag;
+        let kz_norm = kz / k_mag;
+        let dx = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(consts::NRAYS as f64 - 1.0);
+        let dkx = (0.5286-0.4892)/(consts::NRAYS as f64 - 1.0);
+        let dkz = (0.8670-0.8489)/(consts::NRAYS as f64 - 1.0);
+        let beam = Beam {
+            rays: (0..consts::NRAYS).map(|i| {
+                let mut ray = Ray {
+                    crossings: Vec::new(),
+                    x0: (i as f64 * dx + consts::BEAM_MIN_Z) * (-kz_norm) + x,
+                    z0: (i as f64 * dx + consts::BEAM_MIN_Z) * (kx_norm) + z,
+                    cx0: 0.0,
+                    cz0: 0.0,
+                    kx0: i as f64 * dkx + 0.4892,
+                    kz0: i as f64 * dkz + 0.8489,
+                    uray: Vec::new(),
+                };
+                // ShiftZMin
+                let shiftAmount = (ray.z0 - (consts::ZMIN + 1.0e-10)) / kz_norm;
+                ray.x0 -= shiftAmount * kx_norm;
+                ray.z0 -= shiftAmount * kz_norm;
+                ray.uray.push(0.0);
+                // rotateChild
+                let curr_k_mag = f64::sqrt(ray.kx0*ray.kx0 + ray.kz0*ray.kz0);
+                assert!(curr_k_mag != 0.0);
+                let curr_kx_norm = ray.kx0 / curr_k_mag;
+                let curr_kz_norm = ray.kz0 / curr_k_mag;
+                if curr_kx_norm > 0.0 {
+                    ray.cx0 = consts::CHILD_OFFSET * (-curr_kz_norm) + ray.x0;
+                    ray.cz0 = consts::CHILD_OFFSET * curr_kx_norm + ray.z0;
+                } else {
+                    ray.cx0 = consts::CHILD_OFFSET * curr_kz_norm + ray.x0;
+                    ray.cz0 = consts::CHILD_OFFSET * (-curr_kx_norm) + ray.z0;
+                }
+                ray
+            }).collect(),
+            marked: Vec::new(),
+            raystore: Vec::new(),
+            intensity: 5e15,
+        };
+        beam
+    }
+    /// This fn. is for the 3rd beam in the 3beam test case.
+    pub fn beam4() -> Beam {
+        let x = consts::OFFSET3;
+        let z = consts::ZMIN;
+        let kx = -0.3;
+        let kz = 1.0;
+        let k_mag = f64::sqrt(kx*kx + kz*kz);
+        let kx_norm = kx / k_mag;
+        let kz_norm = kz / k_mag;
+        let dx = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(consts::NRAYS as f64 - 1.0);
+        let dkx = (-0.2971-(-0.2743))/(consts::NRAYS as f64 - 1.0);
+        let dkz = (0.9548-0.9616)/(consts::NRAYS as f64 - 1.0);
+        let beam = Beam {
+            rays: (0..consts::NRAYS).map(|i| {
+                let mut ray = Ray {
+                    crossings: Vec::new(),
+                    x0: (i as f64 * dx + consts::BEAM_MIN_Z) * (-kz_norm) + x,
+                    z0: (i as f64 * dx + consts::BEAM_MIN_Z) * (kx_norm) + z,
+                    cx0: 0.0,
+                    cz0: 0.0,
+                    kx0: i as f64 * dkx + -0.2743,
+                    kz0: i as f64 * dkz + 0.9616,
+                    uray: Vec::new(),
+                };
+                // ShiftZMin
+                let shiftAmount = (ray.z0 - (consts::ZMIN + 1.0e-10)) / kz_norm;
+                ray.x0 -= shiftAmount * kx_norm;
+                ray.z0 -= shiftAmount * kz_norm;
+                ray.uray.push(0.0);
+                // rotateChild
+                let curr_k_mag = f64::sqrt(ray.kx0*ray.kx0 + ray.kz0*ray.kz0);
+                assert!(curr_k_mag != 0.0);
+                let curr_kx_norm = ray.kx0 / curr_k_mag;
+                let curr_kz_norm = ray.kz0 / curr_k_mag;
+                if curr_kx_norm > 0.0 {
+                    ray.cx0 = consts::CHILD_OFFSET * (-curr_kz_norm) + ray.x0;
+                    ray.cz0 = consts::CHILD_OFFSET * curr_kx_norm + ray.z0;
+                } else {
+                    ray.cx0 = consts::CHILD_OFFSET * curr_kz_norm + ray.x0;
+                    ray.cz0 = consts::CHILD_OFFSET * (-curr_kx_norm) + ray.z0;
+                }
+                ray
+            }).collect(),
+            marked: Vec::new(),
+            raystore: Vec::new(),
+            intensity: 5e15,
         };
         beam
     }

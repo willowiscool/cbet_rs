@@ -69,6 +69,18 @@ impl Mesh {
         }
     }
 
+    pub fn init_eden_machnum_3beam(&mut self, ncrit: f64) {
+        let xmax = self.xmax;
+        let xmin = self.xmin;
+        for x in 0..self.nx {
+            for z in 0..self.nz {
+                let pt = self.get_mut(x, z);
+                pt.eden = f64::max(0.0, ((0.4*ncrit-0.1*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.1*ncrit));
+                pt.machnum = -(f64::max(0.0, (((2.2)-(1.4))/(xmax-xmin))*(pt.x-xmin))+(1.4));
+            }
+        }
+    }
+
     /// Gets the point at mesh coordinates x, z
     pub fn get(&self, x: usize, z: usize) -> &Point {
         &self.points[(x*self.nz + z) as usize]

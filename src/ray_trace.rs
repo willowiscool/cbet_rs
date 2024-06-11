@@ -295,7 +295,9 @@ fn launch_parent_ray(
             if need_to_swap {
                 ray.crossings.swap(last_crossing_ind, last_crossing_ind-1);
             }
-            calc_dk(ray, last_crossing_ind-2);
+            if last_crossing_ind > 1 {
+                calc_dk(ray, last_crossing_ind-2);
+            }
             calc_dk(ray, last_crossing_ind-1);
         } else if (is_cross_x || is_cross_z) && ray.crossings.len() > 1 {
             calc_dk(ray, ray.crossings.len()-2);

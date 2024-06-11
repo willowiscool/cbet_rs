@@ -230,13 +230,13 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
 /// have different intensities in the future.
 ///
 /// C++ equivalent: initArrays in cbet.cpp
-pub fn init_crossings(beams: &mut [Beam], intensity: f64) /*-> f64*/ {
+pub fn init_crossings(beams: &mut [Beam]) /*-> f64*/ {
     //let mut dkmags = Vec::new();
     beams.iter().for_each(|beam| {
         let increment = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(beam.rays.len() as f64-1.0);
         beam.rays.iter().enumerate().for_each(|(i, ray)| {
             let offset = consts::BEAM_MIN_Z + (increment*i as f64);
-            let intensity = (intensity/1e14)*f64::exp(-2.0*f64::abs(offset/2e-4).powf(4.0));
+            let intensity = (beam.intensity/1e14)*f64::exp(-2.0*f64::abs(offset/2e-4).powf(4.0));
 
             ray.crossings.iter().for_each(|crossing| {
                 let mut crossing = crossing.lock().unwrap();
