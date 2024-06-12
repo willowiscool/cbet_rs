@@ -30,7 +30,6 @@ pub fn save_hdf5(mesh: &Mesh, beams: &[Beam], filename: &str) -> Result<(), hdf5
         let mut ct = vec![0.0; mesh.nx*mesh.nz];
         beam.rays.iter().for_each(|ray| {
             ray.crossings.iter().for_each(|crossing| {
-                let crossing = crossing.lock().unwrap();
                 intensities[crossing.boxesx*mesh.nz + crossing.boxesz] += crossing.i_b;
                 ct[crossing.boxesx*mesh.nz + crossing.boxesz] += 1.0;
             });

@@ -197,7 +197,7 @@ impl Beam {
 /// only the first item of the list is stored so I'm only using one
 #[derive(Debug)]
 pub struct Ray {
-    pub crossings: Vec<Mutex<Crossing>>,
+    pub crossings: Vec<Crossing>,
     pub x0: f64,
     pub z0: f64,
     pub cx0: f64,
@@ -228,5 +228,4 @@ pub struct Crossing {
     pub dkz: f64,
     pub dkmag: f64,
     pub i_b: f64,
-    pub w_mult: f64,
 }

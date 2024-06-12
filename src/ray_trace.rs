@@ -191,7 +191,7 @@ fn launch_parent_ray(
             assert!((frac >= 0.0) && (frac <= 1.0));
 
             if f64::abs(crossx - lastz) > 1.0e-12 {
-                let crossing = Mutex::new(Crossing {
+                let crossing = Crossing {
                     x: currx,
                     z: crossx,
                     boxesx: meshx,
@@ -219,8 +219,7 @@ fn launch_parent_ray(
                     dkz: 0.0,
                     dkmag: 0.0,
                     i_b: -1.0,
-                    w_mult: 1.0,
-                });
+                };
                 let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
                 markedpt.push((raynum, ray.crossings.len()));
                 ray.crossings.push(crossing);
@@ -249,7 +248,7 @@ fn launch_parent_ray(
             assert!((frac >= 0.0) && (frac <= 1.0));
 
             if f64::abs(crossz - lastx) > 1.0e-12 {
-                let crossing = Mutex::new(Crossing {
+                let crossing = Crossing {
                     x: crossz,
                     z: currz,
                     boxesx: meshx,
@@ -277,8 +276,7 @@ fn launch_parent_ray(
                     dkz: 0.0,
                     dkmag: 0.0,
                     i_b: -1.0,
-                    w_mult: 1.0,
-                });
+                };
                 let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
                 markedpt.push((raynum, ray.crossings.len()));
                 ray.crossings.push(crossing);
@@ -291,8 +289,8 @@ fn launch_parent_ray(
         if is_cross_x && is_cross_z {
             let last_crossing_ind = ray.crossings.len()-1;
             let need_to_swap = {
-                let last_crossing = ray.crossings[last_crossing_ind].lock().unwrap();
-                let second_last_crossing = ray.crossings[last_crossing_ind-1].lock().unwrap();
+                let last_crossing = &ray.crossings[last_crossing_ind];
+                let second_last_crossing = &ray.crossings[last_crossing_ind-1];
                 (x - prev_x) * (last_crossing.x - second_last_crossing.x) < 0.0
             };
             if need_to_swap {
@@ -317,19 +315,17 @@ fn launch_parent_ray(
 /// crossings.
 fn calc_dk(ray: &mut Ray, ind: usize) {
     assert!(ind < ray.crossings.len()-1);
-    let mut curr_crossing = ray.crossings[ind].lock().unwrap();
-    let next_crossing = ray.crossings[ind+1].lock().unwrap();
-    let dkx = next_crossing.x - curr_crossing.x;
-    let dkz = next_crossing.z - curr_crossing.z;
+    let dkx = ray.crossings[ind+1].x - ray.crossings[ind].x;
+    let dkz = ray.crossings[ind+1].z - ray.crossings[ind].z;
     let dkmag = f64::sqrt(dkx.powi(2) + dkz.powi(2));
     // normalize, as in cpp impl.
     let dkx_new = dkx/dkmag;
     let dkz_new = dkz/dkmag;
     let dkmag_new = dkmag*10000.0;
 
-    curr_crossing.dkx = dkx_new;
-    curr_crossing.dkz = dkz_new;
-    curr_crossing.dkmag = dkmag_new;
+    ray.crossings[ind].dkx = dkx_new;
+    ray.crossings[ind].dkz = dkz_new;
+    ray.crossings[ind].dkmag = dkmag_new;
 }
 
 /// Launch the child ray. Returns a vector of coordinates at each timestamp that represent the
