@@ -1,4 +1,5 @@
 use crate::consts;
+use std::sync::Mutex;
 
 /// TODO: Give beam a position and direction within it, and then make a general new beam
 /// function that takes position and direction and populates rays. For now, the functions that
@@ -17,7 +18,7 @@ use crate::consts;
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
-    pub marked: Vec<Vec<usize>>,
+    pub marked: Vec<Mutex<Vec<usize>>>,
     pub raystore: Vec<(bool, usize)>,
 }
 impl Beam {
@@ -130,6 +131,5 @@ pub struct Crossing {
     pub dkz: f64,
     pub dkmag: f64,
     pub i_b: f64,
-    pub w_mult: f64,
 }
 

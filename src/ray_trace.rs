@@ -3,6 +3,8 @@ use crate::mesh::*;
 use crate::utils;
 use crate::consts;
 use std::cmp::min;
+use std::sync::Mutex;
+use rayon::prelude::*;
 
 /// The rayTrace function populates the crossings of the rays in the beam array. It also
 /// populates the marked array of each beam. It overwrites any existing crossings and marked
@@ -54,10 +56,10 @@ pub fn ray_trace(mesh: &Mesh, beams: &mut [Beam]) {
 
     beams.iter_mut().for_each(|beam| {
         // Initialize the marked array
-        beam.marked = (0..(mesh.nx * mesh.nz)).map(|_| Vec::new()).collect();
-        beam.rays.iter_mut().enumerate().for_each(|(i, ray)| {
+        beam.marked = (0..(mesh.nx * mesh.nz)).map(|_| Mutex::new(Vec::new())).collect();
+        beam.rays.par_iter_mut().enumerate().for_each(|(i, ray)| {
             let child = launch_child_ray(ray, mesh, &deden);
-            launch_parent_ray(ray, mesh, &deden, &child, &mut beam.marked, i);
+            launch_parent_ray(ray, mesh, &deden, &child, &beam.marked, i);
         });
     });
 }
@@ -90,7 +92,7 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
 /// pointers, which might be what we could switch it to?)
 fn launch_parent_ray(
     ray: &mut Ray, mesh: &Mesh, deden: &Vec<(f64, f64)>,
-    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<usize>>, raynum: usize
+    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &Vec<Mutex<Vec<usize>>>, raynum: usize
 ) {
     // Maybe it is better to have all of these in one vector that stores a struct, i.e.
     // struct Timestamp { x, z, vx, vz, mx, mz }??
@@ -220,7 +222,6 @@ fn launch_parent_ray(
                     dkz: 0.0,
                     dkmag: 0.0,
                     i_b: -1.0,
-                    w_mult: 1.0,
                 });
                 is_cross_x = true;
                 lastx = currx;
@@ -274,7 +275,6 @@ fn launch_parent_ray(
                     dkz: 0.0,
                     dkmag: 0.0,
                     i_b: -1.0,
-                    w_mult: 1.0,
                 });
                 is_cross_z = true;
                 lastz = currz;
@@ -293,7 +293,8 @@ fn launch_parent_ray(
         }
         // update marked array
         if meshx != prev_meshx || meshz != prev_meshz {
-            marked[meshx*mesh.nz + meshz].push(raynum);
+            let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
+            markedpt.push(raynum);
         }
         //uray.push(uray[tt-1]);
         curr_dist += f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));

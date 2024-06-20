@@ -1,6 +1,7 @@
 use crate::beam::*;
 use crate::mesh::*;
 use crate::consts;
+use rayon::prelude::*;
 
 /// Do the CBET calculation! Populates the i_b fields of each crossing
 pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
@@ -9,8 +10,8 @@ pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
     create_raystore(beams, mesh.nx, mesh.nz);
 
     for i in 1..=500 {
-        get_cbet_gain(mesh, beams);
-        let updateconv = update_intensities(beams, 0.0, currmax);
+        let w_mult_values = get_cbet_gain(mesh, beams);
+        let updateconv = update_intensities(beams, w_mult_values, 0.0, currmax);
         if updateconv <= consts::CONVERGE {
             break;
         }
@@ -61,16 +62,16 @@ fn post(mesh: &Mesh, beams: &mut [Beam]) {
 /// 
 /// A possible big optimization is to fold together this fn. and get_cbet_gain! because of the
 /// loops!
-fn update_intensities(beams: &mut [Beam], conv_max: f64, curr_max: f64) -> f64 {
+fn update_intensities(beams: &mut [Beam], w_mult_values: Vec<Vec<Vec<f64>>>, conv_max: f64, curr_max: f64) -> f64 {
     let mut curr_conv_max = conv_max;
-    beams.iter_mut().for_each(|beam| {
-        beam.rays.iter_mut().for_each(|ray| {
+    beams.iter_mut().enumerate().for_each(|(beamnum, beam)| {
+        beam.rays.iter_mut().enumerate().for_each(|(raynum, ray)| {
             let i0 = ray.crossings[0].i_b;
             let mut mult_acc = 1.0;
-            ray.crossings.iter_mut().for_each(|crossing| {
+            ray.crossings.iter_mut().enumerate().for_each(|(crossingnum, crossing)| {
                 let (new_intensity, new_conv_max) = limit_energy(crossing, mult_acc, i0, curr_max, curr_conv_max);
                 curr_conv_max = new_conv_max;
-                mult_acc *= crossing.w_mult;
+                mult_acc *= w_mult_values[beamnum][raynum][crossingnum];
                 crossing.i_b = new_intensity;
             });
         });
@@ -101,15 +102,10 @@ fn limit_energy(crossing: &Crossing, multiplier_acc: f64, i0: f64, curr_max: f64
 }
 
 /// Get CBET gain. Modifies the w_mult property of each crossing.
-fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
-    for beam_num in 0..beams.len() {
-        // using split_at_mut because we need to borrow the current beam mutably as
-        // well as some crossings from the other beams (one other beam at a time)
-        // immutably
-        let (before, incl_after) = beams.split_at_mut(beam_num);
-        let (beam_vec, after) = incl_after.split_at_mut(1);
-        beam_vec[0].rays.iter_mut().for_each(|ray| {
-            ray.crossings.iter_mut().for_each(|crossing| {
+fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) -> Vec<Vec<Vec<f64>>> {
+    beams.iter().enumerate().map(|(beamnum, beam)| {
+        beam.rays.par_iter().map(|ray| {
+            ray.crossings.iter().map(|crossing| {
                 let ix = crossing.boxesx;
                 let iz = crossing.boxesz;
                 //let is_last = i == ray.crossings.len()-1;
@@ -126,14 +122,17 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
 
                     get_cbet_increment(mesh, crossing, raycross, raycross_next)
                 };
-                let cbet_sum = 
-                    before.iter().map(other_beam_cbet_incr.clone()).sum::<f64>() +
-                    after.iter().map(other_beam_cbet_incr.clone()).sum::<f64>();
+                let cbet_sum = beams.iter().enumerate().map(|(otherbeamnum, other_beam)| {
+                    if beamnum == otherbeamnum {
+                        return 0.0;
+                    }
+                    other_beam_cbet_incr(other_beam)
+                }).sum::<f64>();
 
-                crossing.w_mult = f64::exp(-1.0*cbet_sum);
-            });
-        });
-    }
+                f64::exp(-1.0*cbet_sum)
+            }).collect()
+        }).collect()
+    }).collect()
 }
 
 /// This is where all of the math lives. Lines 162 through 209 of cbet.cpp are translated here.
@@ -235,7 +234,6 @@ pub fn init_crossings(beams: &mut [Beam], intensity: f64) /*-> f64*/ {
 
             ray.crossings.iter_mut().for_each(|crossing| {
                 crossing.i_b = intensity;
-                crossing.w_mult = 1.0;
 
                 //if f64::abs(crossing.dkmag) > 1e-10 {
                 //    dkmags.push(crossing.dkmag);
@@ -257,7 +255,7 @@ fn create_raystore(beams: &mut [Beam], nx: usize, nz: usize) {
         beam.raystore = (0..nx*nz).map(|i| {
             let x = i / nz;
             let z = i % nz;
-            let marked = &beam.marked[x*nz+z];
+            let marked = &beam.marked[x*nz+z].lock().unwrap();
             match marked.len() {
                 0 => (false, 0),
                 1 => (true, marked[0]),
