@@ -8,12 +8,19 @@ pub mod cbet;
 
 use crate::mesh::*;
 use crate::beam::*;
+use rayon;
 
 /// Creates a new mesh using the consts defined in consts.rs
 pub fn new_default_mesh() -> Mesh {
     Mesh::new_lin(
         consts::XMIN, consts::XMAX, consts::NX,
         consts::ZMIN, consts::ZMAX, consts::NZ,
+    )
+}
+pub fn new_weak_scaled_mesh() -> Mesh {
+    Mesh::new_lin(
+        consts::XMIN, consts::XMAX, (consts::NX as f64*f64::sqrt(rayon::current_num_threads() as f64)) as usize,
+        consts::ZMIN, consts::ZMAX, (consts::NZ as f64*f64::sqrt(rayon::current_num_threads() as f64)) as usize,
     )
 }
 

@@ -6,8 +6,10 @@ use cbet_rs::cbet;
 use std::time::SystemTime;
 
 fn main() {
+    println!("Number of threads: {}", rayon::current_num_threads());
     println!("Creating and initializing mesh");
     let mut m = cbet_rs::new_default_mesh();
+    //let mut m = cbet_rs::new_weak_scaled_mesh();
     m.init_eden_machnum(consts::NCRIT);
 
     println!("Creating and initializing beams");

@@ -28,9 +28,13 @@ impl Beam {
     /// I choose to initialize the marked array in the ray tracing function, which gets the
     /// mesh (and thus the dimensions)
     pub fn beam1() -> Beam {
-        let dz = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(consts::NRAYS as f64 - 1.0);
+        let nrays = consts::NRAYS * match std::env::var("SCALE_FACTOR") {
+            Ok(sf) => sf.parse::<usize>().unwrap(),
+            Err(_) => rayon::current_num_threads(),
+        };
+        let dz = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(nrays as f64 - 1.0);
         let beam = Beam {
-            rays: (0..consts::NRAYS).map(|i| {
+            rays: (0..nrays).map(|i| {
                 // can make uray with capacity NT but not sure that's needed
                 let mut ray = Ray {
                     crossings: Vec::new(),
@@ -61,9 +65,13 @@ impl Beam {
         beam
     }
     pub fn beam2() -> Beam {
-        let dx = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(consts::NRAYS as f64 - 1.0);
+        let nrays = consts::NRAYS * match std::env::var("SCALE_FACTOR") {
+            Ok(sf) => sf.parse::<usize>().unwrap(),
+            Err(_) => rayon::current_num_threads(),
+        };
+        let dx = (consts::BEAM_MAX_Z-consts::BEAM_MIN_Z)/(nrays as f64 - 1.0);
         let beam = Beam {
-            rays: (0..consts::NRAYS).map(|i| {
+            rays: (0..nrays).map(|i| {
                 // can make uray with capacity NT but not sure that's needed
                 let mut ray = Ray {
                     crossings: Vec::new(),
