@@ -128,6 +128,8 @@ fn launch_parent_ray(
     let mut vx = consts::C_SPEED*consts::C_SPEED * ((ray.kx0 / knorm) * k) / consts::OMEGA;
     let mut vz = consts::C_SPEED*consts::C_SPEED * ((ray.kz0 / knorm) * k) / consts::OMEGA;
 
+    let mut kds = 0.0;
+
     let mut curr_dist = 0.0;
     for _ in 1..consts::NT {
         // 1. Calculate velocity and position at current timestamp
@@ -161,6 +163,42 @@ fn launch_parent_ray(
             (min(mesh.nx - 1, meshx + 1), min(mesh.nz - 1, meshz + 1))
         );
 
+        // defining an inline function since it takes so many variables from its
+        // environment...
+        let new_crossing = |x: f64, z: f64, frac: f64| {
+            let distance_to_crossing = f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
+            Crossing {
+                x,
+                z,
+                boxesx: meshx,
+                boxesz: meshz,
+                area_ratio: {
+                    let childxp = utils::interp(childx, &distance, curr_dist + distance_to_crossing);
+                    let childzp = utils::interp(childz, &distance, curr_dist + distance_to_crossing);
+
+                    let diff_x = x - childxp;
+                    let diff_z = z - childzp;
+                    let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
+
+                    let interpkx = frac*prev_vx + (1.0-frac)*vx;
+                    let interpkz = frac*prev_vz + (1.0-frac)*vz;
+                    let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
+
+                    let proj_coeff = f64::abs(
+                        (interpkx/interpk_mag) * (diff_z/diff_mag)
+                        - (interpkz/interpk_mag) * (diff_x/diff_mag));
+
+                    diff_mag*proj_coeff/init_area
+                },
+                dkx: 0.0,
+                dkz: 0.0,
+                dkmag: 0.0,
+                i_b: -1.0,
+                energy: f64::exp(kds - distance_to_crossing * mesh.get(meshx, meshz).kib_multiplier),
+                absorption_coeff: 0.0,
+            }
+        };
+
         let mut lastx = 10000.0;
         let mut lastz = 10000.0;
         let mut is_cross_x = false;
@@ -191,35 +229,7 @@ fn launch_parent_ray(
             assert!((frac >= 0.0) && (frac <= 1.0));
 
             if f64::abs(crossx - lastz) > 1.0e-12 {
-                let crossing = Crossing {
-                    x: currx,
-                    z: crossx,
-                    boxesx: meshx,
-                    boxesz: meshz,
-                    area_ratio: {
-                        let extra = f64::sqrt((currx - prev_x).powi(2) + (crossx - prev_z).powi(2));
-                        let childxp = utils::interp(childx, &distance, curr_dist + extra);
-                        let childzp = utils::interp(childz, &distance, curr_dist + extra);
-
-                        let diff_x = currx - childxp;
-                        let diff_z = crossx - childzp;
-                        let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
-
-                        let interpkx = frac*prev_vx + (1.0-frac)*vx;
-                        let interpkz = frac*prev_vz + (1.0-frac)*vz;
-                        let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
-
-                        let proj_coeff = f64::abs(
-                            (interpkx/interpk_mag) * (diff_z/diff_mag)
-                            - (interpkz/interpk_mag) * (diff_x/diff_mag));
-
-                        diff_mag*proj_coeff/init_area
-                    },
-                    dkx: 0.0,
-                    dkz: 0.0,
-                    dkmag: 0.0,
-                    i_b: -1.0,
-                };
+                let crossing = new_crossing(currx, crossx, frac);
                 let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
                 markedpt.push((raynum, ray.crossings.len()));
                 ray.crossings.push(crossing);
@@ -248,35 +258,7 @@ fn launch_parent_ray(
             assert!((frac >= 0.0) && (frac <= 1.0));
 
             if f64::abs(crossz - lastx) > 1.0e-12 {
-                let crossing = Crossing {
-                    x: crossz,
-                    z: currz,
-                    boxesx: meshx,
-                    boxesz: meshz,
-                    area_ratio: {
-                        let extra = f64::sqrt((crossz - prev_x).powi(2) + (currz - prev_z).powi(2));
-                        let childxp = utils::interp(childx, &distance, curr_dist + extra);
-                        let childzp = utils::interp(childz, &distance, curr_dist + extra);
-
-                        let diff_x = crossz - childxp;
-                        let diff_z = currz - childzp;
-                        let diff_mag = f64::sqrt(diff_x*diff_x + diff_z*diff_z);
-
-                        let interpkx = frac*prev_vx + (1.0-frac)*vx;
-                        let interpkz = frac*prev_vz + (1.0-frac)*vz;
-                        let interpk_mag = f64::sqrt(interpkx*interpkx + interpkz*interpkz);
-
-                        let proj_coeff = f64::abs(
-                            (interpkx/interpk_mag) * (diff_z/diff_mag)
-                            - (interpkz/interpk_mag) * (diff_x/diff_mag));
-
-                        diff_mag*proj_coeff/init_area
-                    },
-                    dkx: 0.0,
-                    dkz: 0.0,
-                    dkmag: 0.0,
-                    i_b: -1.0,
-                };
+                let crossing = new_crossing(crossz, currz, frac);
                 let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
                 markedpt.push((raynum, ray.crossings.len()));
                 ray.crossings.push(crossing);
@@ -303,8 +285,9 @@ fn launch_parent_ray(
         } else if (is_cross_x || is_cross_z) && ray.crossings.len() > 1 {
             calc_dk(ray, ray.crossings.len()-2);
         }
-        //uray.push(uray[tt-1]);
-        curr_dist += f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
+        let distance_travelled = f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
+        curr_dist += distance_travelled;
+        kds -= distance_travelled * mesh.get(meshx, meshz).kib_multiplier;
         if x < mesh.xmin || x > mesh.xmax || z < mesh.zmin || z > mesh.zmax {
             break;
         }

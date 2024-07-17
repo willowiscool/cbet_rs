@@ -216,7 +216,9 @@ pub struct Ray {
 /// ray tracing runs, but figured it would be more efficient to compute them in the ray tracing
 /// function. also, computed as dkx_new, dkz_new, dkmag_new in cpp impl.
 /// * i_b: the intensity, calculated in the CBET stage.
-/// * wMult: "cumulative product of the normalized ray energies" - cbet.cpp:336
+/// * energy: the energy multiplier from absorption calculations, multiplied into the initial
+/// intensity --- exp(kds)!
+/// * absorption_coeff: next energy/current energy
 #[derive(Debug, Clone)]
 pub struct Crossing {
     pub x: f64,
@@ -228,4 +230,6 @@ pub struct Crossing {
     pub dkz: f64,
     pub dkmag: f64,
     pub i_b: f64,
+    pub energy: f64,
+    pub absorption_coeff: f64,
 }

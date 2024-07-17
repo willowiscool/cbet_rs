@@ -18,8 +18,8 @@ pub const BEAM_MIN_Z: f64 = -3.0e-4;
 // the as usize operation is not necessarily safe but it's fine I guess
 pub const NRAYS: usize = (RAYS_PER_ZONE as f64 * (BEAM_MAX_Z-BEAM_MIN_Z)/((ZMAX-ZMIN)/(NZ as f64-1.0))) as usize;
 pub const OFFSET1: f64 = 0.1e-4;
-//pub const OFFSET2: f64 = 0.2e-4;
-pub const OFFSET2: f64 = -4.0e-4; // 3beam test case
+pub const OFFSET2: f64 = 0.2e-4;
+//pub const OFFSET2: f64 = -4.0e-4; // 3beam test case
 pub const OFFSET3: f64 = 3.0e-4;
 pub const DIR1: [f64; 2] = [1.0, 0.0];
 pub const DIR2: [f64; 2] = [0.0, 1.0];

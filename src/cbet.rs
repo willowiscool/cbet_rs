@@ -61,20 +61,20 @@ fn post(mesh: &Mesh, beams: &mut [Beam]) {
 /// updateconv in cbet fn.). The variable names are different because that's how it is in the
 /// c++ implementation.
 fn update_intensities(beams: &mut [Beam], w_mult_values: Vec<Vec<Vec<f64>>>, conv_max: f64, curr_max: f64) -> f64 {
-    let mut curr_conv_max = conv_max;
-    beams.iter_mut().enumerate().for_each(|(beamnum, beam)| {
-        beam.rays.iter_mut().enumerate().for_each(|(raynum, ray)| {
+    beams.iter_mut().enumerate().map(|(beamnum, beam)| {
+        beam.rays.par_iter_mut().enumerate().map(|(raynum, ray)| {
             let i0 = ray.crossings[0].i_b;
             let mut mult_acc = 1.0;
+            let mut curr_conv_max = conv_max;
             ray.crossings.iter_mut().enumerate().for_each(|(crossingnum, crossing)| {
                 let (new_intensity, new_conv_max) = limit_energy(&crossing, mult_acc, i0, curr_max, curr_conv_max);
                 curr_conv_max = new_conv_max;
                 mult_acc *= w_mult_values[beamnum][raynum][crossingnum];
                 crossing.i_b = new_intensity;
             });
-        });
-    });
-    curr_conv_max
+            curr_conv_max
+        }).reduce(|| {0.0}, |a, b| f64::max(a, b))
+    }).fold(0.0, |a, b| f64::max(a, b))
 }
 
 /// limitEnergy fn. from cpp, returns new value of updateConv/convMax/maxChange, whichever you
@@ -133,7 +133,7 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) -> Vec<Vec<Vec<f64>>> {
 
                 //let mut crossing = crossing.lock().unwrap();
                 //crossing.w_mult = f64::exp(-1.0*cbet_sum);
-                f64::exp(-1.0*cbet_sum)
+                f64::exp(-1.0*cbet_sum) * crossing.absorption_coeff
             }).collect()
         }).collect()
     }).collect()
@@ -197,6 +197,8 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
     let param4 = interaction_mult;
     // WILLOW SAYS: "ds" is replaced with crossing.dkmag, cuz that's what it is
     let coupling_mult = param1*param2/param3*param4*crossing.dkmag; // get the coupling multiplier
+    // random polarization (TODO include a flag for this?) taken from commit b44a of c++ code
+    // coupling_mult *= (1.0 + (kx_seed * kx_pump + kz_seed * kz_pump).powi(2)) / 4.0;
     
     let other_intensity1 = raycross.i_b;
     let other_intensity2 = raycross_next.i_b;
@@ -206,9 +208,7 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
     coupling_mult*avg_intensity
 }
 
-/// Initialize the i_b and w_mult values of each crossing, given an initial intensity. One TODO
-/// would be to have the intensity be a property of the beam instead, so different beams can
-/// have different intensities in the future.
+/// Initialize the i_b and w_mult values of each crossing, given an initial intensity.
 ///
 /// C++ equivalent: initArrays in cbet.cpp
 pub fn init_crossings(beams: &mut [Beam]) /*-> f64*/ {
@@ -219,14 +219,14 @@ pub fn init_crossings(beams: &mut [Beam]) /*-> f64*/ {
             let offset = consts::BEAM_MIN_Z + (increment*i as f64);
             let intensity = (beam.intensity/1e14)*f64::exp(-2.0*f64::abs(offset/2e-4).powf(4.0));
 
-            ray.crossings.iter_mut().for_each(|crossing| {
-                crossing.i_b = intensity;
-                //crossing.w_mult = 1.0;
-
-                //if f64::abs(crossing.dkmag) > 1e-10 {
-                //    dkmags.push(crossing.dkmag);
-                //}
-            });
+            for j in 0..ray.crossings.len() {
+                ray.crossings[j].i_b = intensity * ray.crossings[j].energy;
+                if j == ray.crossings.len()-1 {
+                    ray.crossings[j].absorption_coeff = 1.0;
+                } else {
+                    ray.crossings[j].absorption_coeff = ray.crossings[j+1].energy / ray.crossings[j].energy;
+                }
+            }
         });
     });
 

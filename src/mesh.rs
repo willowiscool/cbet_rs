@@ -1,11 +1,16 @@
 //use crate::consts;
 /// Point stores all of the information used at a given point in the mesh
+///
+/// kib_multiplier = 1e4 * kib * (eden / ncrit).powi(2) / f64::sqrt(dielectric)
+/// where dielectric = 1 - eden / ncrit
 #[derive(Debug)]
 pub struct Point {
     pub x: f64,
     pub z: f64,
     pub eden: f64,
     pub machnum: f64,
+    pub kib: f64,
+    pub kib_multiplier: f64,
 }
 /// Mesh struct
 /// * dx, dz are width and height of each zone
@@ -48,28 +53,40 @@ impl Mesh {
                     z: z as f64 * mesh.dz + zmin,
                     eden: 0.0,
                     machnum: 0.0,
+                    kib: 0.0,
+                    kib_multiplier: 0.0,
                 });
             }
         }
         mesh
     }
 
-    /// Initializes the eden and machnum. Creates a linear gradient of them.
+    /// Initializes the eden and machnum. Creates a linear gradient of them. Also initializes the
+    /// KIB values (absorption constants)
     /// 
     /// Based on main.cpp lines 508-517.
-    pub fn init_eden_machnum(&mut self, ncrit: f64) {
+    pub fn init_points(&mut self, ncrit: f64, kib: f64) {
         let xmax = self.xmax;
         let xmin = self.xmin;
         for x in 0..self.nx {
+            let pt = self.get_mut(x, 0);
+            let eden = f64::max(0.0, ((0.4*ncrit-0.1*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.1*ncrit));
+            let machnum = f64::min(0.0, (((-1.8)-(-1.0))/(xmax-xmin))*(pt.x-xmin))+(-1.0);
+            let kib_multiplier = {
+                let dielectric = 1.0 - (eden / ncrit);
+                1e4 * kib * (eden / ncrit).powi(2) / f64::sqrt(dielectric)
+            };
             for z in 0..self.nz {
                 let pt = self.get_mut(x, z);
-                pt.eden = f64::max(0.0, ((0.4*ncrit-0.1*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.1*ncrit));
-                pt.machnum = f64::min(0.0, (((-1.8)-(-1.0))/(xmax-xmin))*(pt.x-xmin))+(-1.0);
+                pt.eden = eden;
+                pt.machnum = machnum;
+                pt.kib = kib;
+                pt.kib_multiplier = kib_multiplier;
             }
         }
     }
 
-    pub fn init_eden_machnum_3beam(&mut self, ncrit: f64) {
+    pub fn init_points_3beam(&mut self, ncrit: f64, kib: f64) {
         let xmax = self.xmax;
         let xmin = self.xmin;
         for x in 0..self.nx {
@@ -77,6 +94,8 @@ impl Mesh {
                 let pt = self.get_mut(x, z);
                 pt.eden = f64::max(0.0, ((0.4*ncrit-0.1*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.1*ncrit));
                 pt.machnum = -(f64::max(0.0, (((2.2)-(1.4))/(xmax-xmin))*(pt.x-xmin))+(1.4));
+                pt.kib = kib * (pt.eden / ncrit).powi(2);
+                pt.kib_multiplier = 0.0; // ignoring this one for now, TODO i guess
             }
         }
     }
