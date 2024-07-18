@@ -10,6 +10,8 @@ pub const NZ: usize = 251;
 pub const ZMIN: f64 = -8.0e-4;
 pub const ZMAX: f64 = 8.0e-4;
 
+pub const NU_EI_C: f64 = 500.0;
+
 // Beam constants
 pub const RAYS_PER_ZONE: usize = 4;
 pub const BEAM_MAX_Z: f64 = 3.0e-4;

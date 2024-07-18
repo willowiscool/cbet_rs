@@ -70,7 +70,7 @@ impl Mesh {
         let xmin = self.xmin;
         for x in 0..self.nx {
             let pt = self.get_mut(x, 0);
-            let eden = f64::max(0.0, ((0.4*ncrit-0.1*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.1*ncrit));
+            let eden = f64::max(0.0, ((0.4*ncrit-0.001*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.001*ncrit));
             let machnum = f64::min(0.0, (((-1.8)-(-1.0))/(xmax-xmin))*(pt.x-xmin))+(-1.0);
             let kib_multiplier = {
                 let dielectric = 1.0 - (eden / ncrit);

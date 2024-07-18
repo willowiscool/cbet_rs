@@ -221,10 +221,15 @@ pub fn init_crossings(beams: &mut [Beam]) /*-> f64*/ {
 
             for j in 0..ray.crossings.len() {
                 ray.crossings[j].i_b = intensity * ray.crossings[j].energy;
-                if j == ray.crossings.len()-1 {
+                /*if j == ray.crossings.len()-1 {
                     ray.crossings[j].absorption_coeff = 1.0;
                 } else {
                     ray.crossings[j].absorption_coeff = ray.crossings[j+1].energy / ray.crossings[j].energy;
+                }*/
+                if j == 0 {
+                    ray.crossings[j].absorption_coeff = ray.crossings[j].energy;
+                } else {
+                    ray.crossings[j].absorption_coeff = ray.crossings[j].energy / ray.crossings[j-1].energy;
                 }
             }
         });
