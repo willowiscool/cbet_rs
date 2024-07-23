@@ -51,7 +51,7 @@ pub fn ray_trace(mesh: &Mesh, beams: &mut [Beam]) {
         deden[i*mesh.nz+(mesh.nz-1)] = deden[i*mesh.nz+(mesh.nz-2)];
     }
 
-    beams.iter_mut().for_each(|beam| {
+    beams.iter_mut().enumerate().for_each(|(beamnum, beam)| {
         // Initialize the marked array
         beam.marked = (0..(mesh.nx * mesh.nz)).map(|_| Mutex::new(Vec::new())).collect();
         beam.rays.par_iter_mut().enumerate().for_each(|(i, ray)| {
@@ -129,6 +129,7 @@ fn launch_parent_ray(
     let mut vz = consts::C_SPEED*consts::C_SPEED * ((ray.kz0 / knorm) * k) / consts::OMEGA;
 
     let mut kds = 0.0;
+    let mut phase = 0.0;
 
     let mut curr_dist = 0.0;
     for _ in 1..consts::NT {
@@ -162,6 +163,7 @@ fn launch_parent_ray(
             ),
             (min(mesh.nx - 1, meshx + 1), min(mesh.nz - 1, meshz + 1))
         );
+        let meshpt = mesh.get(meshx, meshz);
 
         // defining an inline function since it takes so many variables from its
         // environment...
@@ -194,8 +196,9 @@ fn launch_parent_ray(
                 dkz: 0.0,
                 dkmag: 0.0,
                 i_b: -1.0,
-                energy: f64::exp(kds - distance_to_crossing * mesh.get(meshx, meshz).kib_multiplier),
+                energy: f64::exp(kds - distance_to_crossing * meshpt.kib_multiplier),
                 absorption_coeff: 0.0,
+                phase: phase + distance_to_crossing * meshpt.permittivity_multiplier,
             }
         };
 
@@ -287,7 +290,8 @@ fn launch_parent_ray(
         }
         let distance_travelled = f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));
         curr_dist += distance_travelled;
-        kds -= distance_travelled * mesh.get(meshx, meshz).kib_multiplier;
+        kds -= distance_travelled * meshpt.kib_multiplier;
+        phase += distance_travelled * meshpt.permittivity_multiplier;
         if x < mesh.xmin || x > mesh.xmax || z < mesh.zmin || z > mesh.zmax {
             break;
         }

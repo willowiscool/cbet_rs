@@ -1,8 +1,10 @@
-//use crate::consts;
+use crate::consts;
 /// Point stores all of the information used at a given point in the mesh
 ///
 /// kib_multiplier = 1e4 * kib * (eden / ncrit).powi(2) / f64::sqrt(dielectric)
 /// where dielectric = 1 - eden / ncrit
+///
+/// permittivity_multiplier = permittivity * consts::OMEGA / consts::C_SPEED
 #[derive(Debug)]
 pub struct Point {
     pub x: f64,
@@ -11,6 +13,7 @@ pub struct Point {
     pub machnum: f64,
     pub kib: f64,
     pub kib_multiplier: f64,
+    pub permittivity_multiplier: f64,
 }
 /// Mesh struct
 /// * dx, dz are width and height of each zone
@@ -55,6 +58,7 @@ impl Mesh {
                     machnum: 0.0,
                     kib: 0.0,
                     kib_multiplier: 0.0,
+                    permittivity_multiplier: 0.0,
                 });
             }
         }
@@ -72,16 +76,16 @@ impl Mesh {
             let pt = self.get_mut(x, 0);
             let eden = f64::max(0.0, ((0.4*ncrit-0.001*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.001*ncrit));
             let machnum = f64::min(0.0, (((-1.8)-(-1.0))/(xmax-xmin))*(pt.x-xmin))+(-1.0);
-            let kib_multiplier = {
-                let dielectric = 1.0 - (eden / ncrit);
-                1e4 * kib * (eden / ncrit).powi(2) / f64::sqrt(dielectric)
-            };
+            let sqrt_permittivity = f64::sqrt(1.0 - (eden / ncrit)); // also sqrt(dielectric)
+            let kib_multiplier = 1e4 * kib * (eden / ncrit).powi(2) / sqrt_permittivity;
+            let permittivity_multiplier = f64::max(sqrt_permittivity, 0.0) * consts::OMEGA / consts::C_SPEED;
             for z in 0..self.nz {
                 let pt = self.get_mut(x, z);
                 pt.eden = eden;
                 pt.machnum = machnum;
                 pt.kib = kib;
                 pt.kib_multiplier = kib_multiplier;
+                pt.permittivity_multiplier = permittivity_multiplier;
             }
         }
     }

@@ -232,4 +232,5 @@ pub struct Crossing {
     pub i_b: f64,
     pub energy: f64,
     pub absorption_coeff: f64,
+    pub phase: f64,
 }
