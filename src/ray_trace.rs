@@ -5,6 +5,7 @@ use crate::consts;
 use std::cmp::min;
 use std::sync::Mutex;
 use rayon::prelude::*;
+use ndarray::Array2;
 
 /// The rayTrace function populates the crossings of the rays in the beam array. It also
 /// populates the marked array of each beam. It overwrites any existing crossings and marked
@@ -17,43 +18,45 @@ pub fn ray_trace(mesh: &Mesh, beams: &mut [Beam]) {
     // dedendx/z are being put into one vec which holds an (x, z) tuple
     // deden = derivative of eden
     // need to skip points on outer edges of mesh
-    let mut deden: Vec<(f64, f64)> = mesh.points.iter().enumerate().map(|(i, point)| {
-        let x = i / mesh.nz;
-        let z = i % mesh.nz;
+
+    let mut deden = Array2::from_shape_fn(mesh.points.dim(), |(x, z)| {
         if x == mesh.nx - 1 || z == mesh.nz - 1 {
             (0.0, 0.0)
         } else {
+            let point = mesh.get(x, z);
             let dedendx = if x == 0 { 0.0 } else {
-                (point.eden - mesh.get(x-1, z).eden)/(point.x-mesh.get(x-1, z).x)
+                let prev_point_x = mesh.get(x-1, z);
+                (point.eden - prev_point_x.eden)/(point.x-prev_point_x.x)
             };
             let dedendz = if z == 0 { 0.0 } else {
-                (point.eden - mesh.get(x, z-1).eden)/(point.z-mesh.get(x, z-1).z)
+                let prev_point_z = mesh.get(x, z-1);
+                (point.eden - prev_point_z.eden)/(point.z-prev_point_z.z)
             };
             (dedendx, dedendz)
         }
-    }).collect();
+    });
 
     // fill in outer points
     // ROW - i is the column in the row that's being modified
     for i in 0..mesh.nz {
         // first row: x = 0, fill in xes only
         // mesh.nz+i is point at (1, i)
-        deden[i].0 = deden[mesh.nz+i].0;
+        deden[[0, i]].0 = deden[[1, i]].0;
         // fill in x = mesh.nx - 1
         // tuple implements copy so no need to worry
-        deden[(mesh.nz*(mesh.nx-1))+i] = deden[(mesh.nz*(mesh.nx-2))+i];
+        deden[[mesh.nx-1, i]] = deden[[mesh.nx-2, i]];
     }
     // COL - i is the row in the column that's being modified
     for i in 0..mesh.nx {
         // first col: z = 0, fill in zs only
-        deden[i*mesh.nz].1 = deden[i*mesh.nz+1].1;
+        deden[[i, 0]].1 = deden[[i, 1]].1;
         // fill in z = mesh.nz - 1
-        deden[i*mesh.nz+(mesh.nz-1)] = deden[i*mesh.nz+(mesh.nz-2)];
+        deden[[i, mesh.nz - 1]] = deden[[i, mesh.nz - 2]];
     }
 
-    beams.iter_mut().enumerate().for_each(|(beamnum, beam)| {
+    beams.iter_mut().for_each(|beam| {
         // Initialize the marked array
-        beam.marked = (0..(mesh.nx * mesh.nz)).map(|_| Mutex::new(Vec::new())).collect();
+        beam.marked = Array2::from_shape_fn((mesh.nx, mesh.nz), |_| Mutex::new(Vec::new()));
         beam.rays.par_iter_mut().enumerate().for_each(|(i, ray)| {
             let child = launch_child_ray(ray, mesh, &deden);
             launch_parent_ray(ray, mesh, &deden, &child, &beam.marked, i);
@@ -70,8 +73,8 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
     // Also, I changed pow(..., 2) to just multiplying it by itself
     let wpe_interp = f64::sqrt(
         utils::interp_closure(
-            |i| { mesh.points[mesh.nz*i].eden }, mesh.nx, // eden.col(0) as y, ysize
-            |i| { mesh.points[mesh.nz*i].x }, mesh.nx, // x.col(0) as x, xsize
+            |i| { mesh.points[[i, 0]].eden }, mesh.nx, // eden.col(0) as y, ysize
+            |i| { mesh.points[[i, 0]].x }, mesh.nx, // x.col(0) as x, xsize
             x0
         ) * 1e6 * consts::EC*consts::EC / (consts::ME*consts::E0)
     );
@@ -88,8 +91,8 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
 /// i is the ray index, because rays are stored in the marked array as indices (rather than
 /// pointers, which might be what we could switch it to?)
 fn launch_parent_ray(
-    ray: &mut Ray, mesh: &Mesh, deden: &Vec<(f64, f64)>,
-    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &Vec<Mutex<Vec<(usize, usize)>>>, raynum: usize
+    ray: &mut Ray, mesh: &Mesh, deden: &Array2<(f64, f64)>,
+    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &Array2<Mutex<Vec<(usize, usize)>>>, raynum: usize
 ) {
     // Maybe it is better to have all of these in one vector that stores a struct, i.e.
     // struct Timestamp { x, z, vx, vz, mx, mz }??
@@ -136,17 +139,19 @@ fn launch_parent_ray(
         // 1. Calculate velocity and position at current timestamp
         // ===
         // **copied from launch_child_ray**
-        let mydedendx = utils::interp_closure(
-            |i| { deden[mesh.nz*i + (mesh.nz+1)/2].0 }, mesh.nx, //dedendx.col((nz+1)/2)
-            |i| { mesh.points[mesh.nz*i].x }, mesh.nx, // x.col(0)
-            x
-        );
+        let dedendx = if meshx == mesh.nx - 1 { deden[[meshx, meshz]].0 } else {
+            deden[[meshx, meshz]].0 + (
+                (deden[[meshx+1, meshz]].0 - deden[[meshx, meshz]].0)
+                / (mesh.get(meshx+1, meshz).x - mesh.get(meshx, meshz).x)
+                * (x - mesh.get(meshx, meshz).x)
+            )
+        };
 
         // update pos, vel, equivalent to setting myx/z[tt] and myvx/z[tt]
         let prev_vx = vx;
         let prev_vz = vz;
-        vx = vx - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * mydedendx * consts::DT;
-        vz = vz - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * deden[meshx*mesh.nz + meshz].1 * consts::DT;
+        vx = vx - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * dedendx * consts::DT;
+        vz = vz - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * deden[[meshx, meshz]].1 * consts::DT;
         let prev_x = x;
         let prev_z = z;
         x = prev_x + vx * consts::DT;
@@ -233,7 +238,7 @@ fn launch_parent_ray(
 
             if f64::abs(crossx - lastz) > 1.0e-12 {
                 let crossing = new_crossing(currx, crossx, frac);
-                let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
+                let mut markedpt = marked[[meshx, meshz]].lock().unwrap();
                 markedpt.push((raynum, ray.crossings.len()));
                 ray.crossings.push(crossing);
 
@@ -262,7 +267,7 @@ fn launch_parent_ray(
 
             if f64::abs(crossz - lastx) > 1.0e-12 {
                 let crossing = new_crossing(crossz, currz, frac);
-                let mut markedpt = marked[meshx*mesh.nz + meshz].lock().unwrap();
+                let mut markedpt = marked[[meshx, meshz]].lock().unwrap();
                 markedpt.push((raynum, ray.crossings.len()));
                 ray.crossings.push(crossing);
 
@@ -318,7 +323,7 @@ fn calc_dk(ray: &mut Ray, ind: usize) {
 /// Launch the child ray. Returns a vector of coordinates at each timestamp that represent the
 /// trajectory of the child ray.
 fn launch_child_ray(
-    ray: &mut Ray, mesh: &Mesh, deden: &Vec<(f64, f64)>
+    ray: &mut Ray, mesh: &Mesh, deden: &Array2<(f64, f64)>
 ) -> (Vec<f64>, Vec<f64>) {
     // renamed from myx, myz
     //let mut pos: Vec<(f64, f64)> = Vec::new();
@@ -342,18 +347,24 @@ fn launch_child_ray(
         // 1. Calculate velocity and position at current timestamp
         // ===
         // might also assume a linear electron density gradient?
-        // TODO: move computing dedendx.col, x.col outside of for loop
-        let mydedendx = utils::interp_closure(
+        /*let mydedendx = utils::interp_closure(
             |i| { deden[mesh.nz*i + (mesh.nz+1)/2].0 }, mesh.nx, // dedendx.col((nz+1)/2)
             |i| { mesh.points[mesh.nz*i].x }, mesh.nx, // x.col(0)
             x[tt-1]
-        );
+        );*/
+        let dedendx = if meshx == mesh.nx - 1 { deden[[meshx, meshz]].0 } else {
+            deden[[meshx, meshz]].0 + (
+                (deden[[meshx+1, meshz]].0 - deden[[meshx, meshz]].0)
+                / (mesh.get(meshx+1, meshz).x - mesh.get(meshx, meshz).x)
+                * (x[tt-1] - mesh.get(meshx, meshz).x)
+            )
+        };
 
         // QUESTION: why is mydedendx computed but not mydedendz???
         // ANSWER: for the current test cases, because of the linear electron gradient,
-        // mydedendz is constant
-        vx = vx - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * mydedendx * consts::DT;
-        vz = vz - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * deden[meshx*mesh.nz + meshz].1 * consts::DT;
+        // mydedendz is constant across a row
+        vx = vx - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * dedendx * consts::DT;
+        vz = vz - consts::C_SPEED*consts::C_SPEED / (2.0 * consts::NCRIT) * deden[[meshx, meshz]].1 * consts::DT;
 
         x.push(x[tt-1] + vx * consts::DT);
         z.push(z[tt-1] + vz * consts::DT);

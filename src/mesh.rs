@@ -1,4 +1,5 @@
-use crate::consts;
+// use crate::consts;
+use ndarray::Array2;
 /// Point stores all of the information used at a given point in the mesh
 ///
 /// kib_multiplier = 1e4 * kib * (eden / ncrit).powi(2) / f64::sqrt(dielectric)
@@ -20,7 +21,7 @@ pub struct Point {
 /// * nx, nz are the number of zones in each dimension
 /// * xmin, xmax, zmin, zmax store the minimum real-world coordinates (inclusive)
 pub struct Mesh {
-    pub points: Vec<Point>,
+    pub points: Array2<Point>,
     pub dx: f64,
     pub dz: f64,
     pub nx: usize,
@@ -32,85 +33,46 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    /// Creates a new linear mesh
+    /// Creates a new linear mesh. pointFn must take real x, z coordinates (not mesh coordinates)
+    /// and return a Point.
     ///
     /// Consider changing the params to a Config struct?
-    pub fn new_lin(
-        xmin: f64, xmax: f64, nx: usize, zmin: f64, zmax: f64, nz: usize
-    ) -> Mesh {
-        let mut mesh = Mesh {
+    pub fn new_lin<F>(
+        xmin: f64, xmax: f64, nx: usize, zmin: f64, zmax: f64, nz: usize,
+        point_fn: F,
+    ) -> Mesh
+    where
+        F: Fn(f64, f64) -> Point
+    {
+        let dx = (xmax - xmin)/(nx as f64 - 1.0);
+        let dz = (zmax - zmin)/(nz as f64 - 1.0);
+        Mesh {
             xmin,
             xmax,
-            nx,
             zmin,
             zmax,
+            dx,
+            dz,
+            nx,
             nz,
-            dx: (xmax-xmin)/(nx as f64 - 1.0),
-            dz: (zmax-zmin)/(nz as f64 - 1.0),
-            points: Vec::with_capacity(nx * nz),
-        };
-        for x in 0..nx {
-            for z in 0..nz {
-                mesh.points.push(Point {
-                    x: x as f64 * mesh.dx + xmin,
-                    z: z as f64 * mesh.dz + zmin,
-                    eden: 0.0,
-                    machnum: 0.0,
-                    kib: 0.0,
-                    kib_multiplier: 0.0,
-                    permittivity_multiplier: 0.0,
-                });
-            }
-        }
-        mesh
-    }
-
-    /// Initializes the eden and machnum. Creates a linear gradient of them. Also initializes the
-    /// KIB values (absorption constants)
-    /// 
-    /// Based on main.cpp lines 508-517.
-    pub fn init_points(&mut self, ncrit: f64, kib: f64) {
-        let xmax = self.xmax;
-        let xmin = self.xmin;
-        for x in 0..self.nx {
-            let pt = self.get_mut(x, 0);
-            let eden = f64::max(0.0, ((0.4*ncrit-0.001*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.001*ncrit));
-            let machnum = f64::min(0.0, (((-1.8)-(-1.0))/(xmax-xmin))*(pt.x-xmin))+(-1.0);
-            let sqrt_permittivity = f64::sqrt(1.0 - (eden / ncrit)); // also sqrt(dielectric)
-            let kib_multiplier = 1e4 * kib * (eden / ncrit).powi(2) / sqrt_permittivity;
-            let permittivity_multiplier = f64::max(sqrt_permittivity, 0.0) * consts::OMEGA / consts::C_SPEED;
-            for z in 0..self.nz {
-                let pt = self.get_mut(x, z);
-                pt.eden = eden;
-                pt.machnum = machnum;
-                pt.kib = kib;
-                pt.kib_multiplier = kib_multiplier;
-                pt.permittivity_multiplier = permittivity_multiplier;
-            }
+            points: Array2::from_shape_fn(
+                (nx, nz),
+                |(meshx, meshz)| {
+                    point_fn(meshx as f64 * dx + xmin, meshz as f64 * dz + zmin)
+                }
+            )
         }
     }
 
-    pub fn init_points_3beam(&mut self, ncrit: f64, kib: f64) {
-        let xmax = self.xmax;
-        let xmin = self.xmin;
-        for x in 0..self.nx {
-            for z in 0..self.nz {
-                let pt = self.get_mut(x, z);
-                pt.eden = f64::max(0.0, ((0.4*ncrit-0.1*ncrit)/(xmax-xmin))*(pt.x-xmin)+(0.1*ncrit));
-                pt.machnum = -(f64::max(0.0, (((2.2)-(1.4))/(xmax-xmin))*(pt.x-xmin))+(1.4));
-                pt.kib = kib * (pt.eden / ncrit).powi(2);
-                pt.kib_multiplier = 0.0; // ignoring this one for now, TODO i guess
-            }
-        }
-    }
-
-    /// Gets the point at mesh coordinates x, z
+    /// Gets the point at mesh coordinates x, z (TODO: error check?)
     pub fn get(&self, x: usize, z: usize) -> &Point {
-        &self.points[(x*self.nz + z) as usize]
+        //&self.points[(x*self.nz + z) as usize]
+        self.points.get((x, z)).expect("Tried to get point out of bounds")
     }
     /// Gets the point at mesh coordinates x, z, mutably
     pub fn get_mut(&mut self, x: usize, z: usize) -> &mut Point {
-        &mut self.points[(x*self.nz + z) as usize]
+        //&mut self.points[(x*self.nz + z) as usize]
+        self.points.get_mut((x, z)).expect("Tried to get point out of bounds")
     }
     /// Gets the mesh coordinates of a point given its real-world coordinates.
     /// This code may be improved to be faster but it isn't used often so it's ok.

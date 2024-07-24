@@ -248,7 +248,7 @@ fn create_raystore(beams: &mut [Beam], nx: usize, nz: usize) {
         beam.raystore = (0..nx*nz).map(|i| {
             let x = i / nz;
             let z = i % nz;
-            let marked = &beam.marked[x*nz+z].lock().unwrap();
+            let marked = &beam.marked[[x, z]].lock().unwrap();
             match marked.len() {
                 0 => (false, (0, 0)),
                 1 => (true, marked[0]),

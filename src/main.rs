@@ -1,4 +1,4 @@
-use cbet_rs::consts;
+//use cbet_rs::consts;
 use cbet_rs::beam::*;
 use cbet_rs::ray_trace;
 use cbet_rs::cbet;
@@ -7,9 +7,10 @@ use std::time::SystemTime;
 
 fn main() {
     println!("Creating and initializing mesh");
-    let mut m = cbet_rs::new_default_mesh();
-    m.init_points(consts::NCRIT, 2.0 * consts::NU_EI_C * 1e12/(consts::C_SPEED*1e4));
+    //let mut m = cbet_rs::new_default_mesh();
+    //m.init_points(consts::NCRIT, 2.0 * consts::NU_EI_C * 1e12/(consts::C_SPEED*1e4));
     //m.init_eden_machnum_3beam(consts::NCRIT);
+    let m = cbet_rs::new_mesh();
 
     println!("Creating and initializing beams");
     let beam1 = Beam::beam1();

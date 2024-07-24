@@ -57,10 +57,6 @@ where
 /// interpolated y value for the x value given.
 ///
 /// NOTE: does not handle errors. panics instead. (TODO fix??)
-/// 
-/// Possible optimization (as mentioned in ray_trace.rs, before interp is first used): let
-/// interp take closures for y, x so that if, for example, your y/x are a column of a vector,
-/// you don't have to copy ALL the values beforehand.
 pub fn interp(y: &Vec<f64>, x: &Vec<f64>, xp: f64) -> f64 {
     assert_eq!(x.len(), y.len());
 

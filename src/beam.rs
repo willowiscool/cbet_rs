@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use ndarray::Array2;
 use crate::consts;
 
 /// TODO: Give beam a position and direction within it, and then make a general new beam
@@ -13,7 +14,7 @@ use crate::consts;
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
-    pub marked: Vec<Mutex<Vec<(usize, usize)>>>,
+    pub marked: Array2<Mutex<Vec<(usize, usize)>>>,
     pub raystore: Vec<(bool, (usize, usize))>,
     pub intensity: f64,
 }
@@ -51,7 +52,7 @@ impl Beam {
                 );
                 ray
             }).collect(),
-            marked: Vec::new(),
+            marked: Array2::from_shape_vec((0, 0), vec![]).unwrap(),
             raystore: Vec::new(),
             intensity: consts::INTENSITY,
         };
@@ -79,7 +80,7 @@ impl Beam {
                 );
                 ray
             }).collect(),
-            marked: Vec::new(),
+            marked: Array2::from_shape_vec((0, 0), vec![]).unwrap(),
             raystore: Vec::new(),
             intensity: consts::INTENSITY,
         };
@@ -129,7 +130,7 @@ impl Beam {
                 }
                 ray
             }).collect(),
-            marked: Vec::new(),
+            marked: Array2::from_shape_vec((0, 0), vec![]).unwrap(),
             raystore: Vec::new(),
             intensity: 5e15,
         };
@@ -178,7 +179,7 @@ impl Beam {
                 }
                 ray
             }).collect(),
-            marked: Vec::new(),
+            marked: Array2::from_shape_vec((0, 0), vec![]).unwrap(),
             raystore: Vec::new(),
             intensity: 5e15,
         };
