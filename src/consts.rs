@@ -10,6 +10,10 @@ pub const NZ: usize = 251;
 pub const ZMIN: f64 = -8.0e-4;
 pub const ZMAX: f64 = 8.0e-4;
 
+pub const NY: usize = 251;
+pub const YMIN: f64 = -8.0e-4;
+pub const YMAX: f64 = 8.0e-4;
+
 pub const NU_EI_C: f64 = 500.0;
 
 // Beam constants

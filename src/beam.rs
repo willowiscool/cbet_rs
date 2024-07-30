@@ -1,6 +1,8 @@
 use std::sync::Mutex;
-use ndarray::Array2;
+use ndarray::{Array3, Array2, Array};
+use num::traits::Float;
 use crate::consts;
+use crate::mesh::XYZ;
 
 /// TODO: Give beam a position and direction within it, and then make a general new beam
 /// function that takes position and direction and populates rays. For now, the functions that
@@ -14,11 +16,75 @@ use crate::consts;
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
-    pub marked: Array2<Mutex<Vec<(usize, usize)>>>,
+    pub marked: Array3<Mutex<Vec<(usize, usize)>>>,
     pub raystore: Vec<(bool, (usize, usize))>,
     pub intensity: f64,
 }
+pub enum Source {
+    MinX,
+    MinY,
+    MinZ,
+}
 impl Beam {
+    /// Creates a new beam
+    pub fn new(
+        source: Source, offset: XYZ<f64>, nrays: usize, direction: XYZ<f64>, width: f64, intensity: f64
+    ) -> Beam {
+        // make rays: first, make circle of coordinates
+        let coords = Array::linspace(-0.5, 0.5, nrays);
+        Beam {
+            rays: Array2::from_shape_fn((nrays, nrays), |(x, y)| (coords[x], coords[y]))
+                .iter()
+                .filter(|(x, y)| f64::sqrt(x.powi(2) + y.powi(2)) <= 0.5)
+                .map(|(x, y)| {
+                    let mut ray = Ray {
+                        crossings: Vec::new(),
+                        pos0: match source {
+                            Source::MinX => XYZ {
+                                x: consts::XMIN,
+                                y: x * width + offset.y,
+                                z: y * width + offset.z,
+                            },
+                            Source::MinY => XYZ {
+                                x: x * width + offset.x,
+                                y: consts::YMIN,
+                                z: y * width + offset.z,
+                            },
+                            Source::MinZ => XYZ {
+                                x: x * width + offset.x,
+                                y: y * width + offset.y,
+                                z: consts::ZMIN,
+                            },
+                        },
+                        cpos0: XYZ { x: 0.0, y: 0.0, z: 0.0 },
+                        k0: direction,
+                    };
+                    // GUESSING HERE!!!
+                    ray.cpos0 = match source {
+                        Source::MinX => XYZ {
+                            x: consts::XMIN,
+                            y: ray.pos0.y + consts::CHILD_OFFSET,
+                            z: ray.pos0.z + consts::CHILD_OFFSET,
+                        },
+                        Source::MinY => XYZ {
+                            x: ray.pos0.x + consts::CHILD_OFFSET,
+                            y: consts::YMIN,
+                            z: ray.pos0.z + consts::CHILD_OFFSET,
+                        },
+                        Source::MinZ => XYZ {
+                            x: ray.pos0.x + consts::CHILD_OFFSET,
+                            y: ray.pos0.y + consts::CHILD_OFFSET,
+                            z: consts::ZMIN,
+                        },
+                    };
+                    ray
+                }).collect(),
+            marked: Array3::from_shape_vec((0, 0, 0), vec![]).unwrap(),
+            raystore: Vec::new(),
+            intensity,
+        }
+    }
+    /*
     /// Creates the first beam based on a bunch of constants in consts.rs. Close to 1:1
     /// copy of the c++ impl. in rayTracing.
     ///
@@ -184,36 +250,30 @@ impl Beam {
             intensity: 5e15,
         };
         beam
-    }
+    }*/
 }
 
 /// Ray struct stores:
 /// * List of crossings (in mutexes for thread safety while referenced in Crossing!)
-/// * x0, z0: initial position
-/// * cx0, cz0: initial position of child ray. the c++ impl. moves each ray in a single beam by
+/// * pos0: initial position
+/// * cpos0: initial position of child ray. the c++ impl. moves each ray in a single beam by
 /// a child offset, so maybe it is better to have child offset x/z fields in the beam rather
 /// than in the ray? But I'm defining it like this for now.
-/// * kx0, kz0: initial velocity
-/// * uray: absorbtion value or something. the c++ impl. uses a list for this but currently
-/// only the first item of the list is stored so I'm only using one
+/// * k0: initial velocity
 #[derive(Debug)]
 pub struct Ray {
     pub crossings: Vec<Crossing>,
-    pub x0: f64,
-    pub z0: f64,
-    pub cx0: f64,
-    pub cz0: f64,
-    pub kx0: f64,
-    pub kz0: f64,
-    pub uray: Vec<f64>,
+    pub pos0: XYZ<f64>,
+    pub cpos0: XYZ<f64>,
+    pub k0: XYZ<f64>,
 }
 
 /// Crossing struct stores
-/// * x, z: the real-world coordinates of the crossing (c++: crossesx/z)
-/// * boxesx, boxesz: the zone coordinates of the crossing (note: in c++, this is stored as
+/// * pos: the real-world coordinates of the crossing (c++: crossesx/z)
+/// * mesh_pos: the zone coordinates of the crossing (note: in c++, this is stored as
 /// just boxes, where each element is a tuple)
 /// * areaRatio: the ratio between parent and child ray
-/// * dkx, dkz, dkmag: vectors of movement to next crossing, i guess. computed in main.cpp after
+/// * dk, dkmag: vectors of movement to next crossing, i guess. computed in main.cpp after
 /// ray tracing runs, but figured it would be more efficient to compute them in the ray tracing
 /// function. also, computed as dkx_new, dkz_new, dkmag_new in cpp impl.
 /// * i_b: the intensity, calculated in the CBET stage.
@@ -222,13 +282,10 @@ pub struct Ray {
 /// * absorption_coeff: next energy/current energy
 #[derive(Debug, Clone)]
 pub struct Crossing {
-    pub x: f64,
-    pub z: f64,
-    pub boxesx: usize,
-    pub boxesz: usize,
+    pub pos: XYZ<f64>,
+    pub mesh_pos: XYZ<usize>,
     pub area_ratio: f64,
-    pub dkx: f64,
-    pub dkz: f64,
+    pub dk: XYZ<f64>,
     pub dkmag: f64,
     pub i_b: f64,
     pub energy: f64,
