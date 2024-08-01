@@ -90,7 +90,7 @@ fn get_k(mesh: &Mesh, x0: f64) -> f64 {
 /// pointers, which might be what we could switch it to?)
 fn launch_parent_ray(
     ray: &mut Ray, mesh: &Mesh, deden: &Vec<(f64, f64)>,
-    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<usize>>, raynum: usize
+    (childx, childz): &(Vec<f64>, Vec<f64>), marked: &mut Vec<Vec<(usize, usize)>>, raynum: usize
 ) {
     // Maybe it is better to have all of these in one vector that stores a struct, i.e.
     // struct Timestamp { x, z, vx, vz, mx, mz }??
@@ -222,6 +222,8 @@ fn launch_parent_ray(
                     i_b: -1.0,
                     w_mult: 1.0,
                 });
+                marked[meshx*mesh.nx + meshz].push((raynum, ray.crossings.len()-1));
+
                 is_cross_x = true;
                 lastx = currx;
             }
@@ -276,6 +278,7 @@ fn launch_parent_ray(
                     i_b: -1.0,
                     w_mult: 1.0,
                 });
+                marked[meshx*mesh.nx + meshz].push((raynum, ray.crossings.len()-1));
                 is_cross_z = true;
                 lastz = currz;
             }
@@ -290,10 +293,6 @@ fn launch_parent_ray(
             calc_dk(ray, last_crossing_ind-1);
         } else if (is_cross_x || is_cross_z) && ray.crossings.len() > 1 {
             calc_dk(ray, ray.crossings.len()-2);
-        }
-        // update marked array
-        if meshx != prev_meshx || meshz != prev_meshz {
-            marked[meshx*mesh.nz + meshz].push(raynum);
         }
         //uray.push(uray[tt-1]);
         curr_dist += f64::sqrt((x - prev_x).powi(2) + (z - prev_z).powi(2));

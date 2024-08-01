@@ -9,3 +9,6 @@ rand = "0.8.5"
 hdf5 = { git = "https://github.com/aldanor/hdf5-rust.git" }
 # using same vers. as hdf5. only used in save_hdf5
 ndarray = "0.15"
+
+[profile.release]
+debug = true

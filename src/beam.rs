@@ -17,8 +17,8 @@ use crate::consts;
 #[derive(Debug)]
 pub struct Beam {
     pub rays: Vec<Ray>,
-    pub marked: Vec<Vec<usize>>,
-    pub raystore: Vec<(bool, usize)>,
+    pub marked: Vec<Vec<(usize, usize)>>,
+    pub raystore: Vec<(bool, (usize, usize))>,
 }
 impl Beam {
     /// Creates the first beam based on a bunch of constants in consts.rs. Close to 1:1

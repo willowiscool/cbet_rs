@@ -116,13 +116,20 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
 
                 let other_beam_cbet_incr = |other_beam: &Beam| {
                     // other beam's ray in this crossing
-                    let (has_ray, ray_o) = other_beam.raystore[ix*mesh.nz+iz];
-                    if !has_ray {
+                    let (has_crossing, (other_rayind, raycross_ind)) = other_beam.raystore[ix*mesh.nz+iz];
+                    if !has_crossing {
                         return 0.0;
                     }
+                    let other_ray_crossings = &other_beam.rays[other_rayind].crossings;
+                    let raycross = &other_ray_crossings[raycross_ind];
+                    let raycross_next = if raycross_ind+1 == other_ray_crossings.len() {
+                        &raycross
+                    } else {
+                        &other_ray_crossings[raycross_ind+1]
+                    };
                     // using variable name from c++, islastq = is that the
                     // last crossing
-                    let (raycross, raycross_next) = get_raycross(&other_beam.rays[ray_o], ix, iz);
+                    //let (raycross, raycross_next) = get_raycross(&other_beam.rays[ray_o], ix, iz);
 
                     get_cbet_increment(mesh, crossing, raycross, raycross_next)
                 };
@@ -259,7 +266,7 @@ fn create_raystore(beams: &mut [Beam], nx: usize, nz: usize) {
             let z = i % nz;
             let marked = &beam.marked[x*nz+z];
             match marked.len() {
-                0 => (false, 0),
+                0 => (false, (0, 0)),
                 1 => (true, marked[0]),
                 // is it really worth it to use random for this?
                 x => (true, marked[rand::random::<usize>() % x]),
