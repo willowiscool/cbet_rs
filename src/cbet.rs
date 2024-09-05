@@ -3,15 +3,66 @@ use crate::mesh::*;
 use crate::consts;
 use rayon::prelude::*;
 
+pub struct CbetCrosses {
+    pub b_num: usize,
+    pub r_num: usize,
+    pub c_num: usize,
+    pub c_num_next: usize,
+    pub coupling_mult: f64,
+}
+/// Minimal crossing struct that contains only the info needed for cbet
+pub struct CbetCrossing {
+    pub intensity: f64,
+    pub absorption_coeff: f64,
+    pub crosses: Vec<CbetCrosses>,
+}
+
+/// Turn beam crossings into cbet_crossings which only contain the necessary info needed
+pub fn create_cbet_crossings(mesh: &Mesh, beams: &[Beam]) -> Vec<Vec<Vec<CbetCrossing>>> {
+    beams.iter().enumerate().map(|(beamnum, beam)| {
+        beam.rays.par_iter().map(|ray| {
+            ray.crossings.iter().map(|crossing| {
+                CbetCrossing {
+                    intensity: crossing.i_b,
+                    absorption_coeff: crossing.absorption_coeff,
+                    crosses: beams.iter().enumerate()
+                        // o is for other
+                        .filter(|(o_b_num, other_beam)|
+                            *o_b_num != beamnum &&
+                            other_beam.raystore[crossing.boxesx*mesh.nz+crossing.boxesz].0)
+                        .map(|(o_b_num, o_beam)| {
+                            // get raycross, raycross_next
+                            let (_, (o_rayind, raycross_ind)) = o_beam.raystore[crossing.boxesx*mesh.nz+crossing.boxesz];
+                            let o_ray_crossings = &o_beam.rays[o_rayind].crossings;
+                            let raycross = &o_ray_crossings[raycross_ind];
+                            let raycross_next_ind = usize::min(raycross_ind+1, o_ray_crossings.len()-1);
+                            let raycross_next = &o_ray_crossings[raycross_next_ind];
+
+                            CbetCrosses {
+                                b_num: o_b_num,
+                                r_num: o_rayind,
+                                c_num: raycross_ind,
+                                c_num_next: raycross_next_ind,
+                                coupling_mult: get_coupling_mult(mesh, crossing, raycross, raycross_next)
+                            }
+                        }).collect()
+                }
+            }).collect()
+        }).collect()
+    }).collect()
+}
+
 /// Do the CBET calculation! Populates the i_b fields of each crossing
 pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
     consts::init_consts(); // inits CS const
     let mut currmax = consts::MAX_INCR;
     create_raystore(beams, mesh.nx, mesh.nz);
 
+    let mut cbet_crossings = create_cbet_crossings(mesh, beams);
+
     for i in 1..=500 {
-        let w_mult_values = get_cbet_gain(mesh, beams);
-        let updateconv = update_intensities(beams, w_mult_values, 0.0, currmax);
+        let w_mult_values = get_cbet_gain(&cbet_crossings);
+        let updateconv = update_intensities(&mut cbet_crossings, w_mult_values, 0.0, currmax);
         if updateconv <= consts::CONVERGE {
             break;
         }
@@ -21,22 +72,23 @@ pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
         currmax = f64::min(currmaxa, currmaxb);
     }
     println!("Finished cbet, abt to post");
-    post(mesh, beams);
+    post(mesh, beams, &cbet_crossings);
 }
 
-/// Updates the i_b values of each crossing, one last time! Yipee!
-fn post(mesh: &Mesh, beams: &mut [Beam]) {
+/// Updates the i_b values of each crossing, one last time, while also moving this info from the
+/// cbet_crossings back into the beams.
+fn post(mesh: &Mesh, beams: &mut [Beam], cbet_crossings: &Vec<Vec<Vec<CbetCrossing>>>) {
     let w0 = 2.0*std::f64::consts::PI*consts::C_SPEED/consts::LAMBDA;
     let norm_factor_const = f64::sqrt(8.0*std::f64::consts::PI/consts::C_SPEED) * consts::ESTAT / (consts::ME_G*consts::C_SPEED*w0) * f64::sqrt(1e14*1e7);
 
-    beams.iter_mut().for_each(|beam| {
-        beam.rays.iter_mut().for_each(|ray| {
+    beams.iter_mut().enumerate().for_each(|(b_num, beam)| {
+        beam.rays.iter_mut().enumerate().for_each(|(r_num, ray)| {
             // doing this instead of an iterator because there is an immutable
             // borrow of TWO crossings (to calculate area_avg) followed by a
             // mutable borrow of ONE crossing
-            for crossingnum in 0..ray.crossings.len() {
-                let crossing = &ray.crossings[crossingnum];
-                let crossing_next = &ray.crossings[usize::min(crossingnum+1, ray.crossings.len()-1)];
+            for c_num in 0..ray.crossings.len() {
+                let crossing = &ray.crossings[c_num];
+                let crossing_next = &ray.crossings[usize::min(c_num+1, ray.crossings.len()-1)];
                 // some of this code looks copied from the cbet math code (TODO)
                 let ix = crossing.boxesx;
                 let iz = crossing.boxesz;
@@ -48,10 +100,10 @@ fn post(mesh: &Mesh, beams: &mut [Beam]) {
                 let epsilon_eff = ne_term*ne_term;
                 let interaction_mult = 1.0/(area_avg*ne_term)*1.0/f64::sqrt(epsilon_eff);
                 let norm_factor = norm_factor_const * f64::sqrt(interaction_mult) * epsilon_eff.powf(0.25);
-                let intensity_new = f64::sqrt(crossing.i_b) * norm_factor;
+                let intensity_new = f64::sqrt(cbet_crossings[b_num][r_num][c_num].intensity) * norm_factor;
 
                 // now we have mutable borrow
-                ray.crossings[crossingnum].i_b = intensity_new;
+                ray.crossings[c_num].i_b = intensity_new;
             }
         });
     });
@@ -60,17 +112,17 @@ fn post(mesh: &Mesh, beams: &mut [Beam]) {
 /// Updates the i_b values of each crossing. Returns the new value of convMax (which is
 /// updateconv in cbet fn.). The variable names are different because that's how it is in the
 /// c++ implementation.
-fn update_intensities(beams: &mut [Beam], w_mult_values: Vec<Vec<Vec<f64>>>, conv_max: f64, curr_max: f64) -> f64 {
-    beams.iter_mut().enumerate().map(|(beamnum, beam)| {
-        beam.rays.par_iter_mut().enumerate().map(|(raynum, ray)| {
-            let i0 = ray.crossings[0].i_b;
+fn update_intensities(cbet_crossings: &mut Vec<Vec<Vec<CbetCrossing>>>, w_mult_values: Vec<Vec<Vec<f64>>>, conv_max: f64, curr_max: f64) -> f64 {
+    cbet_crossings.iter_mut().enumerate().map(|(b_num, beam_crossings)| {
+        beam_crossings.par_iter_mut().enumerate().map(|(r_num, ray_crossings)| {
+            let i0 = ray_crossings[0].intensity;
             let mut mult_acc = 1.0;
             let mut curr_conv_max = conv_max;
-            ray.crossings.iter_mut().enumerate().for_each(|(crossingnum, crossing)| {
-                let (new_intensity, new_conv_max) = limit_energy(&crossing, mult_acc, i0, curr_max, curr_conv_max);
+            ray_crossings.iter_mut().enumerate().for_each(|(c_num, crossing)| {
+                let (new_intensity, new_conv_max) = limit_energy(crossing.intensity, mult_acc, i0, curr_max, curr_conv_max);
                 curr_conv_max = new_conv_max;
-                mult_acc *= w_mult_values[beamnum][raynum][crossingnum];
-                crossing.i_b = new_intensity;
+                mult_acc *= w_mult_values[b_num][r_num][c_num];
+                crossing.intensity = new_intensity;
             });
             curr_conv_max
         }).reduce(|| {0.0}, |a, b| f64::max(a, b))
@@ -82,9 +134,8 @@ fn update_intensities(beams: &mut [Beam], w_mult_values: Vec<Vec<Vec<f64>>>, con
 ///
 /// Again, c++ variable names copied, some are different from what they're named by the
 /// function that calls them.
-fn limit_energy(crossing: &Crossing, multiplier_acc: f64, i0: f64, curr_max: f64, max_change: f64) -> (f64, f64) {
+fn limit_energy(i_prev: f64, multiplier_acc: f64, i0: f64, curr_max: f64, max_change: f64) -> (f64, f64) {
     // copied comments from c++ impl!
-    let i_prev = crossing.i_b; // previous value in cell
     let mut i_curr = i0*multiplier_acc; // "current" value, unclamped update
     // the fractional change in energy from imposing the update as is
     let fractional_change = f64::abs(i_curr-i_prev)/i_prev;
@@ -100,39 +151,21 @@ fn limit_energy(crossing: &Crossing, multiplier_acc: f64, i0: f64, curr_max: f64
 }
 
 /// Get CBET gain. Returns the w_mult value of each crossing
-fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) -> Vec<Vec<Vec<f64>>> {
-    beams.iter().enumerate().map(|(beamnum, beam)| {
-        beam.rays.par_iter().map(|ray| {
-            ray.crossings.iter().map(|crossing| {
-                let other_beam_cbet_incr = |other_beam: &Beam| {
-                    // raycross/raycross_next are also clones
-                    let (raycross, raycross_next) = {
-                        let (has_crossing, (other_rayind, raycross_ind)) =
-                            other_beam.raystore[crossing.boxesx*mesh.nz+crossing.boxesz];
-                        if !has_crossing {
-                            return 0.0;
-                        }
-                        let other_ray_crossings = &other_beam.rays[other_rayind].crossings;
-                        let raycross = &other_ray_crossings[raycross_ind];
-                        let raycross_next = if raycross_ind+1 == other_ray_crossings.len() {
-                            raycross
-                        } else {
-                            &other_ray_crossings[raycross_ind+1]
-                        };
-                        (raycross, raycross_next)
-                    };
+fn get_cbet_gain(cbet_crossings: &Vec<Vec<Vec<CbetCrossing>>>) -> Vec<Vec<Vec<f64>>> {
+    cbet_crossings.par_iter().map(|beam_crossings| {
+        beam_crossings.par_iter().map(|ray_crossings| {
+            ray_crossings.par_iter().map(|crossing| {
+                // map crosses to cbet_incr and sum up
+                // rc = raycross? i guess? i've typed cross so many times
+                // it's stopped making sense to me...
+                let cbet_sum = crossing.crosses.iter().map(|rc| {
+                    let other_intensity1 = cbet_crossings[rc.b_num][rc.r_num][rc.c_num].intensity;
+                    let other_intensity2 = cbet_crossings[rc.b_num][rc.r_num][rc.c_num_next].intensity;
+                    let avg_intensity = (other_intensity1+other_intensity2)/2.0;
 
-                    get_cbet_increment(mesh, crossing, raycross, raycross_next)
-                };
-                let cbet_sum = beams.iter().enumerate().map(|(otherbeamnum, other_beam)| {
-                    if beamnum == otherbeamnum {
-                        return 0.0;
-                    }
-                    other_beam_cbet_incr(other_beam)
+                    avg_intensity*rc.coupling_mult
                 }).sum::<f64>();
 
-                //let mut crossing = crossing.lock().unwrap();
-                //crossing.w_mult = f64::exp(-1.0*cbet_sum);
                 f64::exp(-1.0*cbet_sum) * crossing.absorption_coeff
             }).collect()
         }).collect()
@@ -142,7 +175,7 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) -> Vec<Vec<Vec<f64>>> {
 /// This is where all of the math lives. Lines 162 through 209 of cbet.cpp are translated here.
 /// Only thing that is changed is variable names are changed to snake case cuz I don't want
 /// cargo to yell at me :(
-fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, raycross_next: &Crossing) -> f64 {
+fn get_coupling_mult(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, raycross_next: &Crossing) -> f64 {
     let mesh_pt = mesh.get(crossing.boxesx, crossing.boxesz);
     // I'm copying comments over from the c++ implementation. They're a little verbose
     // (even for me). Have fun reading!
@@ -199,13 +232,7 @@ fn get_cbet_increment(mesh: &Mesh, crossing: &Crossing, raycross: &Crossing, ray
     let coupling_mult = param1*param2/param3*param4*crossing.dkmag; // get the coupling multiplier
     // random polarization (TODO include a flag for this?) taken from commit b44a of c++ code
     // coupling_mult *= (1.0 + (kx_seed * kx_pump + kz_seed * kz_pump).powi(2)) / 4.0;
-    
-    let other_intensity1 = raycross.i_b;
-    let other_intensity2 = raycross_next.i_b;
-    // average the intensity of the other ray across the cell
-    let avg_intensity = (other_intensity1+other_intensity2)/2.0;
-    
-    coupling_mult*avg_intensity
+    coupling_mult
 }
 
 /// Initialize the i_b and w_mult values of each crossing, given an initial intensity.
