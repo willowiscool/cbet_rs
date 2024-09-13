@@ -7,6 +7,7 @@ use std::time::SystemTime;
 
 fn main() {
     println!("Creating and initializing mesh");
+    println!("N rays: {}", cbet_rs::consts::NRAYS);
     //let mut m = cbet_rs::new_default_mesh();
     //m.init_points(consts::NCRIT, 2.0 * consts::NU_EI_C * 1e12/(consts::C_SPEED*1e4));
     //m.init_eden_machnum_3beam(consts::NCRIT);
