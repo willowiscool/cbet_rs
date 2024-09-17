@@ -1,6 +1,7 @@
 fn main() {
     cxx_build::bridge("src/cbet.rs")
-        .file("src/cpp_cbet.cc")
+        .cuda(true)
+        .file("src/cpp_cbet.cu")
         .compile("cbet_rs");
 
     println!("cargo:rerun-if-changed=src/cbet.rs");

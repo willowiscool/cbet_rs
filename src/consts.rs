@@ -2,11 +2,11 @@
 // ===
 // Mesh constants
 // usize type is used for integers because they are often the lengths of vectors, which are usize
-pub const NX: usize = 500;
+pub const NX: usize = 2500;
 pub const XMIN: f64 = -8.0e-4;
 pub const XMAX: f64 = 8.0e-4;
 
-pub const NZ: usize = 500;
+pub const NZ: usize = 2500;
 pub const ZMIN: f64 = -8.0e-4;
 pub const ZMAX: f64 = 8.0e-4;
 

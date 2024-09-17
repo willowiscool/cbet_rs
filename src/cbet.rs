@@ -21,7 +21,7 @@ mod ffi {
     }
 
     unsafe extern "C++" {
-        include!("cbet_rs/include/cpp_cbet.h");
+        include!("cbet_rs/include/cpp_cbet.cuh");
 
         unsafe fn cpp_cbet(cbet_crossings: *mut CbetCrossing, cbet_crosses: *mut CbetCrosses, nb: usize, nr: usize, nc: usize);
     }
@@ -42,18 +42,6 @@ pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
     unsafe {
         ffi::cpp_cbet(cbet_crossings.as_mut_ptr(), cbet_crosses.as_mut_ptr(), nb, nr, nc);
     }
-
-    /*for i in 1..=500 {
-        let w_mult_values = get_cbet_gain(&cbet_crossings);
-        let updateconv = update_intensities(&mut cbet_crossings, w_mult_values, 0.0, currmax);
-        if updateconv <= consts::CONVERGE {
-            break;
-        }
-
-        let currmaxa = consts::MAX_INCR*f64::powi(consts::CBETCONVERGENCE, i);
-        let currmaxb = consts::CBETCONVERGENCE*updateconv;
-        currmax = f64::min(currmaxa, currmaxb);
-    }*/
     println!("Finished cbet, abt to post");
     post(mesh, beams, &cbet_crossings, nr, nc);
 }
