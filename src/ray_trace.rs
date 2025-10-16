@@ -372,8 +372,6 @@ fn launch_child_ray(
             (min(mesh.nx - 1, meshx + 1), min(mesh.nz - 1, meshz + 1))
         );
 
-        ray.uray.push(ray.uray[tt - 1]);
-
         // 3. Stop the ray if it escapes the mesh
         if x[tt] < mesh.xmin || x[tt] > mesh.xmax || z[tt] < mesh.zmin || z[tt] > mesh.zmax {
             // Here, it outputs the trajectory to a file, TODO test???

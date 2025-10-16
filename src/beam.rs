@@ -39,7 +39,6 @@ impl Beam {
                     cz0: 0.0,
                     kx0: consts::DIR1[0],
                     kz0: consts::DIR1[1],
-                    uray: Vec::new(),
                 };
                 ray.cz0 = ray.z0 + consts::CHILD_OFFSET;
                 // c++ sets the first element of uray to interp(pow_x, phase_x + offset1, z0(n));
@@ -49,9 +48,6 @@ impl Beam {
                 // interp will just fetch the value of pow_x at z0
                 // this might be wrong! so please correct it if it is!!
                 // Also, I don't know why the pow stuff is like that haha
-                ray.uray.push(
-                    consts::URAY_MULT*(-2.0*((ray.z0/consts::SIGMA).powi(2)).powf(4.0/2.0)).exp()
-                );
                 ray
             }).collect(),
             marked: Vec::new(),
@@ -72,13 +68,9 @@ impl Beam {
                     cz0: consts::ZMIN+0.1e-4,
                     kx0: consts::DIR2[0],
                     kz0: consts::DIR2[1],
-                    uray: Vec::new(),
                 };
                 ray.cx0 = ray.x0 + consts::CHILD_OFFSET;
                 // in this case, phase_x + offset2 = ray.x0
-                ray.uray.push(
-                    consts::URAY_MULT2*(-2.0*((ray.x0/consts::SIGMA).powi(2)).powf(4.0/2.0)).exp()
-                );
                 ray
             }).collect(),
             marked: Vec::new(),
@@ -106,7 +98,6 @@ pub struct Ray {
     pub cz0: f64,
     pub kx0: f64,
     pub kz0: f64,
-    pub uray: Vec<f64>,
 }
 
 /// Crossing struct stores
