@@ -1,6 +1,7 @@
 use crate::beam::*;
 use crate::mesh::*;
 use crate::consts;
+use rayon::prelude::*;
 
 /// Do the CBET calculation! Populates the i_b fields of each crossing
 pub fn cbet(mesh: &Mesh, beams: &mut [Beam]) {
@@ -103,12 +104,9 @@ fn limit_energy(crossing: &Crossing, multiplier_acc: f64, i0: f64, curr_max: f64
 /// Get CBET gain. Modifies the w_mult property of each crossing.
 fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
     for beam_num in 0..beams.len() {
-        // using split_at_mut because we need to borrow the current beam mutably as
-        // well as some crossings from the other beams (one other beam at a time)
-        // immutably
         let (before, incl_after) = beams.split_at_mut(beam_num);
         let (beam_vec, after) = incl_after.split_at_mut(1);
-        beam_vec[0].rays.iter_mut().for_each(|ray| {
+        beam_vec[0].rays.par_iter_mut().for_each(|ray| {
             ray.crossings.iter_mut().for_each(|crossing| {
                 let ix = crossing.boxesx;
                 let iz = crossing.boxesz;
@@ -133,10 +131,9 @@ fn get_cbet_gain(mesh: &Mesh, beams: &mut [Beam]) {
 
                     get_cbet_increment(mesh, crossing, raycross, raycross_next)
                 };
-                let cbet_sum = 
+                let cbet_sum =
                     before.iter().map(other_beam_cbet_incr.clone()).sum::<f64>() +
                     after.iter().map(other_beam_cbet_incr.clone()).sum::<f64>();
-
                 crossing.w_mult = f64::exp(-1.0*cbet_sum);
             });
         });
@@ -264,7 +261,7 @@ fn create_raystore(beams: &mut [Beam], nx: usize, nz: usize) {
         beam.raystore = (0..nx*nz).map(|i| {
             let x = i / nz;
             let z = i % nz;
-            let marked = &beam.marked[x*nz+z];
+            let marked = &beam.marked[x*nz+z].lock().unwrap();
             match marked.len() {
                 0 => (false, (0, 0)),
                 1 => (true, marked[0]),
