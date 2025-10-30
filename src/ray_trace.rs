@@ -187,7 +187,8 @@ fn launch_parent_ray(
             // find the z point of intersection
             // TODO inline
             // don't let the name fool you, crossx is a z coordinate
-            let crossx = utils::interp(&vec![prev_z, z], &vec![prev_x, x], currx);
+            // let crossx = utils::interp(&vec![prev_z, z], &vec![prev_x, x], currx);
+            let crossx = prev_z + ((z - prev_z) / (x - prev_x) * (currx - prev_x)); // ***changed***
             let frac = (currx - prev_x) / (x - prev_x);
             assert!((frac >= 0.0) && (frac <= 1.0));
 
@@ -243,7 +244,8 @@ fn launch_parent_ray(
             // find the x point of intersection
             // TODO inline
             // don't let the name fool you, crossz is a x coordinate
-            let crossz = utils::interp(&vec![prev_x, x], &vec![prev_z, z], currz);
+            // let crossz = utils::interp(&vec![prev_x, x], &vec![prev_z, z], currz);
+            let crossz = prev_x + ((x - prev_x) / (z - prev_z)) * (currz - prev_z);
             let frac = (currz - prev_z) / (z - prev_z);
             assert!((frac >= 0.0) && (frac <= 1.0));
 
