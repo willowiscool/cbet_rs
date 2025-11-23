@@ -63,20 +63,20 @@ fn post(mesh: &Mesh, beams: &mut [Beam]) {
 /// A possible big optimization is to fold together this fn. and get_cbet_gain! because of the
 /// loops!
 fn update_intensities(beams: &mut [Beam], conv_max: f64, curr_max: f64) -> f64 {
-    let mut curr_conv_max = conv_max;
-    beams.iter_mut().for_each(|beam| {
-        beam.rays.iter_mut().for_each(|ray| {
+    beams.iter_mut().map(|beam| {
+        beam.rays.par_iter_mut().map(|ray| {
             let i0 = ray.crossings[0].i_b;
             let mut mult_acc = 1.0;
+            let mut curr_conv_max = conv_max;
             ray.crossings.iter_mut().for_each(|crossing| {
                 let (new_intensity, new_conv_max) = limit_energy(crossing, mult_acc, i0, curr_max, curr_conv_max);
                 curr_conv_max = new_conv_max;
                 mult_acc *= crossing.w_mult;
                 crossing.i_b = new_intensity;
             });
-        });
-    });
-    curr_conv_max
+            curr_conv_max
+        }).reduce(|| {0.0}, |a, b| f64::max(a, b))
+    }).fold(0.0, |a, b| f64::max(a, b))
 }
 
 /// limitEnergy fn. from cpp, returns new value of updateConv/convMax/maxChange, whichever you
